@@ -1,5 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.core.database import supabase, supabase_admin
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.core.database import get_db, supabase
+from app.models.user import Profile
 from app.schemas.user import (
     UserRegister, 
     UserLogin, 
@@ -11,12 +14,14 @@ from app.schemas.user import (
 )
 from app.utils.dependencies import get_current_active_user
 import uuid
-from datetime import datetime
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post("/register", response_model=UserResponse)
-async def register_user(user_data: UserRegister):
+async def register_user(
+    user_data: UserRegister,
+    db: AsyncSession = Depends(get_db)
+):
     """Register a new user"""
     
     try:
@@ -39,37 +44,41 @@ async def register_user(user_data: UserRegister):
                 detail="Registration failed"
             )
         
-        user_id = auth_response.user.id
+        user_id = uuid.UUID(auth_response.user.id)
         
         # Check if profile already exists (created by trigger)
-        existing_profile = supabase.table("profiles").select("*").eq("id", user_id).execute()
+        result = await db.execute(
+            select(Profile).where(Profile.id == user_id)
+        )
+        existing_profile = result.scalar_one_or_none()
         
-        if existing_profile.data:
+        if existing_profile:
             # Update existing profile with additional data
-            profile_data = {
-                "first_name": user_data.first_name,
-                "last_name": user_data.last_name,
-                "phone": user_data.phone,
-                "updated_at": datetime.utcnow().isoformat()
-            }
+            if user_data.first_name:
+                existing_profile.first_name = user_data.first_name
+            if user_data.last_name:
+                existing_profile.last_name = user_data.last_name
+            if user_data.phone:
+                existing_profile.phone = user_data.phone
             
-            result = supabase.table("profiles").update(profile_data).eq("id", user_id).execute()
-            profile = result.data[0] if result.data else existing_profile.data[0]
+            await db.commit()
+            await db.refresh(existing_profile)
+            profile = existing_profile
         else:
             # Create profile manually if trigger didn't work
-            profile_data = {
-                "id": user_id,
-                "email": user_data.email,
-                "first_name": user_data.first_name,
-                "last_name": user_data.last_name,
-                "phone": user_data.phone
-            }
-            
-            result = supabase.table("profiles").insert(profile_data).execute()
-            profile = result.data[0]
+            profile = Profile(
+                id=user_id,
+                email=user_data.email,
+                first_name=user_data.first_name,
+                last_name=user_data.last_name,
+                phone=user_data.phone
+            )
+            db.add(profile)
+            await db.commit()
+            await db.refresh(profile)
         
         return UserResponse(
-            user=UserProfile(**profile),
+            user=UserProfile.model_validate(profile),
             access_token=auth_response.session.access_token,
             token_type="bearer",
             expires_in=auth_response.session.expires_in or 3600
@@ -78,13 +87,17 @@ async def register_user(user_data: UserRegister):
     except HTTPException:
         raise
     except Exception as e:
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Registration failed: {str(e)}"
         )
 
 @router.post("/login", response_model=UserResponse)
-async def login_user(login_data: UserLogin):
+async def login_user(
+    login_data: UserLogin,
+    db: AsyncSession = Depends(get_db)
+):
     """Login user"""
     
     try:
@@ -100,27 +113,28 @@ async def login_user(login_data: UserLogin):
                 detail="Invalid credentials"
             )
         
-        user_id = auth_response.user.id
+        user_id = uuid.UUID(auth_response.user.id)
         
         # Get user profile from database
-        result = supabase.table("profiles").select("*").eq("id", user_id).execute()
+        result = await db.execute(
+            select(Profile).where(Profile.id == user_id)
+        )
+        profile = result.scalar_one_or_none()
         
-        if not result.data:
+        if not profile:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User profile not found"
             )
         
-        profile = result.data[0]
-        
-        if not profile.get("is_active", True):
+        if not profile.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Account is deactivated"
             )
         
         return UserResponse(
-            user=UserProfile(**profile),
+            user=UserProfile.model_validate(profile),
             access_token=auth_response.session.access_token,
             token_type="bearer",
             expires_in=auth_response.session.expires_in or 3600
@@ -142,6 +156,8 @@ async def logout_user(current_user: UserProfile = Depends(get_current_active_use
         supabase.auth.sign_out()
         return MessageResponse(message="Successfully logged out")
     except Exception:
+        # Even if Supabase logout fails, we can still return success
+        # since the client will discard the token
         return MessageResponse(message="Successfully logged out")
 
 @router.get("/me", response_model=UserProfile)
@@ -154,28 +170,38 @@ async def get_current_user_info(
 @router.put("/me", response_model=UserProfile)
 async def update_current_user(
     user_update: UserUpdate,
-    current_user: UserProfile = Depends(get_current_active_user)
+    current_user: UserProfile = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """Update current user profile"""
     
     try:
-        # Update fields
-        update_data = user_update.dict(exclude_unset=True)
-        update_data["updated_at"] = datetime.utcnow().isoformat()
+        # Get user from database
+        result = await db.execute(
+            select(Profile).where(Profile.id == current_user.id)
+        )
+        profile = result.scalar_one_or_none()
         
-        result = supabase.table("profiles").update(update_data).eq("id", str(current_user.id)).execute()
-        
-        if not result.data:
+        if not profile:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User profile not found"
             )
         
-        return UserProfile(**result.data[0])
+        # Update fields
+        update_data = user_update.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(profile, field, value)
+        
+        await db.commit()
+        await db.refresh(profile)
+        
+        return UserProfile.model_validate(profile)
         
     except HTTPException:
         raise
     except Exception as e:
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Update failed: {str(e)}"

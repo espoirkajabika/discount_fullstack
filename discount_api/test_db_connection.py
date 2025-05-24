@@ -2,7 +2,13 @@
 """
 Test database connection
 """
+import sys
 import asyncio
+
+# Fix for Windows psycopg3 compatibility
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from app.core.config import settings
 from app.core.database import check_database_health, supabase
 
@@ -21,6 +27,27 @@ async def test_connections():
             print("❌ Direct database connection: FAILED")
     except Exception as e:
         print(f"❌ Direct database connection: ERROR - {e}")
+        print(f"   Error type: {type(e).__name__}")
+        
+    # Test raw connection
+    print("\n🔧 Testing Supabase-based operations...")
+    try:
+        from app.core.database import supabase
+        
+        # Test a simple table operation
+        result = supabase.table("profiles").select("*").limit(1).execute()
+        print(f"✅ Supabase operations: SUCCESS - Found {len(result.data)} profiles")
+        
+        # Test if we can query other tables (like categories)
+        try:
+            categories_result = supabase.table("categories").select("*").limit(3).execute()
+            print(f"✅ Categories table: SUCCESS - Found {len(categories_result.data)} categories")
+        except Exception as e:
+            print(f"ℹ️  Categories table: {e}")
+            
+    except Exception as e:
+        print(f"❌ Supabase operations: ERROR - {e}")
+        print(f"   Error type: {type(e).__name__}")
     
     # Test Supabase connection
     print("\n🔐 Testing Supabase connection...")

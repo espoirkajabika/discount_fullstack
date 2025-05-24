@@ -1,14 +1,19 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from typing import Optional
-from app.core.database import supabase
+from app.core.database import get_db, supabase
+from app.core.security import verify_token
+from app.models.user import Profile
 from app.schemas.user import UserProfile
 import uuid
 
 security = HTTPBearer()
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
 ) -> UserProfile:
     """Get current authenticated user"""
     
@@ -33,20 +38,22 @@ async def get_current_user(
     
     # Get user from database
     try:
-        result = supabase.table("profiles").select("*").eq("id", user_id).execute()
+        user_uuid = uuid.UUID(user_id)
+        result = await db.execute(
+            select(Profile).where(Profile.id == user_uuid)
+        )
+        user = result.scalar_one_or_none()
         
-        if not result.data:
+        if user is None:
             raise credentials_exception
             
-        user_data = result.data[0]
-        
-        if not user_data.get("is_active", True):
+        if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Inactive user"
             )
             
-        return UserProfile(**user_data)
+        return UserProfile.model_validate(user)
     
     except ValueError:
         raise credentials_exception
@@ -91,13 +98,14 @@ async def get_current_admin_user(
 
 # Optional user dependency (doesn't raise exception if no user)
 async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: AsyncSession = Depends(get_db)
 ) -> Optional[UserProfile]:
     """Get current user if authenticated, None otherwise"""
     if not credentials:
         return None
     
     try:
-        return await get_current_user(credentials)
+        return await get_current_user(credentials, db)
     except HTTPException:
         return None

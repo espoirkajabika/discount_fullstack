@@ -1,4 +1,11 @@
-from fastapi import FastAPI, HTTPException
+import sys
+import asyncio
+
+# Fix for Windows psycopg3 compatibility
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import settings
@@ -12,11 +19,14 @@ async def lifespan(app: FastAPI):
     print(f"Starting {settings.app_name}...")
     
     # Check database connection
-    db_healthy = await check_database_health()
-    if not db_healthy:
-        print("⚠️  Warning: Database connection failed")
-    else:
-        print("✅ Database connection successful")
+    try:
+        db_healthy = await check_database_health()
+        if not db_healthy:
+            print("⚠️  Warning: Database connection failed")
+        else:
+            print("✅ Database connection successful")
+    except Exception as e:
+        print(f"⚠️  Database check failed: {e}")
     
     yield
     
@@ -72,6 +82,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=8001,
         reload=settings.debug
     )
