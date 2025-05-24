@@ -6,8 +6,9 @@ from supabase import create_client, Client
 from app.core.config import settings
 
 # SQLAlchemy setup for direct database access
+# Using psycopg instead of asyncpg to avoid Windows build issues
 engine = create_async_engine(
-    settings.database_url.replace("postgresql://", "postgresql+asyncpg://"),
+    settings.database_url.replace("postgresql://", "postgresql+psycopg://"),
     echo=settings.debug
 )
 
