@@ -160,7 +160,7 @@ async def update_current_user(
     
     try:
         # Update fields
-        update_data = user_update.dict(exclude_unset=True)
+        update_data = user_update.model_dump(exclude_unset=True)
         update_data["updated_at"] = datetime.utcnow().isoformat()
         
         result = supabase.table("profiles").update(update_data).eq("id", str(current_user.id)).execute()
