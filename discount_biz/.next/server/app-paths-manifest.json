@@ -3,8 +3,8 @@
   "/favicon.ico/route": "app/favicon.ico/route.js",
   "/dashboard/page": "app/dashboard/page.js",
   "/products/page": "app/products/page.js",
-  "/products/new/page": "app/products/new/page.js",
-  "/auth/login/page": "app/auth/login/page.js",
   "/offers/page": "app/offers/page.js",
-  "/page": "app/page.js"
+  "/products/new/page": "app/products/new/page.js",
+  "/page": "app/page.js",
+  "/offers/new/page": "app/offers/new/page.js"
 }

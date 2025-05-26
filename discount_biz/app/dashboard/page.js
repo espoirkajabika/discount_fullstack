@@ -5,10 +5,36 @@ import { BusinessRoute } from '@/components/ProtectedRoute';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { User, Building, ShoppingBag, Tag, LogOut } from 'lucide-react';
+import { User, Building, ShoppingBag, Tag, LogOut, Plus, ArrowRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 function DashboardContent() {
   const { user, logout } = useAuth();
+  const router = useRouter();
+
+  // Handle logout
+  const handleLogout = async () => {
+    await logout();
+    router.push('/auth/login');
+  };
+
+  // Navigation handlers
+  const handleCreateOffer = () => {
+    router.push('/offers/new');
+  };
+
+  const handleManageProducts = () => {
+    router.push('/products');
+  };
+
+  const handleManageOffers = () => {
+    router.push('/offers');
+  };
+
+  const handleCreateProduct = () => {
+    router.push('/products/new');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -37,7 +63,7 @@ function DashboardContent() {
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={logout}
+                onClick={handleLogout}
                 className="flex items-center space-x-2"
               >
                 <LogOut className="h-4 w-4" />
@@ -113,10 +139,21 @@ function DashboardContent() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <Button size="sm" className="w-full bg-[#FF7139] hover:bg-[#e6632e]">
+                <Button 
+                  size="sm" 
+                  className="w-full bg-[#FF7139] hover:bg-[#e6632e]"
+                  onClick={handleCreateOffer}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
                   Create Offer
                 </Button>
-                <Button size="sm" variant="outline" className="w-full">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={handleManageProducts}
+                >
+                  <ShoppingBag className="h-4 w-4 mr-2" />
                   Manage Products
                 </Button>
               </div>
@@ -126,25 +163,29 @@ function DashboardContent() {
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={handleManageProducts}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Products</CardTitle>
               <ShoppingBag className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">0</div>
-              <p className="text-xs text-muted-foreground">No products yet</p>
+              <p className="text-xs text-muted-foreground">
+                Click to manage products
+              </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={handleManageOffers}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Active Offers</CardTitle>
               <Tag className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">0</div>
-              <p className="text-xs text-muted-foreground">No offers yet</p>
+              <p className="text-xs text-muted-foreground">
+                Click to manage offers
+              </p>
             </CardContent>
           </Card>
 
@@ -185,43 +226,126 @@ function DashboardContent() {
                 <div className="w-8 h-8 rounded-full bg-[#FF7139] text-white flex items-center justify-center text-sm font-medium">
                   1
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className="font-medium">Complete Business Profile</p>
                   <p className="text-sm text-gray-500">Add your business details, category, and contact information</p>
                 </div>
-                <Button size="sm" variant="outline">
-                  Start
+                <Button size="sm" variant="outline" disabled>
+                  Coming Soon
                 </Button>
               </div>
 
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-sm font-medium">
+                <div className="w-8 h-8 rounded-full bg-[#FF7139] text-white flex items-center justify-center text-sm font-medium">
                   2
                 </div>
-                <div>
-                  <p className="font-medium text-gray-400">Add Your First Product</p>
-                  <p className="text-sm text-gray-400">Create a product catalog for your business</p>
+                <div className="flex-1">
+                  <p className="font-medium">Add Your First Product</p>
+                  <p className="text-sm text-gray-500">Create a product catalog for your business</p>
                 </div>
-                <Button size="sm" variant="outline" disabled>
-                  Locked
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={handleCreateProduct}
+                  className="flex items-center space-x-1"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>Add Product</span>
                 </Button>
               </div>
 
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-sm font-medium">
+                <div className="w-8 h-8 rounded-full bg-[#FF7139] text-white flex items-center justify-center text-sm font-medium">
                   3
                 </div>
-                <div>
-                  <p className="font-medium text-gray-400">Create Your First Offer</p>
-                  <p className="text-sm text-gray-400">Start attracting customers with special deals</p>
+                <div className="flex-1">
+                  <p className="font-medium">Create Your First Offer</p>
+                  <p className="text-sm text-gray-500">Start attracting customers with special deals</p>
                 </div>
-                <Button size="sm" variant="outline" disabled>
-                  Locked
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={handleCreateOffer}
+                  className="flex items-center space-x-1"
+                >
+                  <Tag className="h-3 w-3" />
+                  <span>Create Offer</span>
                 </Button>
               </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* Quick Links */}
+        <div className="mt-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Links</CardTitle>
+              <CardDescription>
+                Access key areas of your business dashboard
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Link href="/products">
+                  <Button variant="outline" className="w-full justify-start h-auto p-4">
+                    <div className="flex items-center space-x-3">
+                      <ShoppingBag className="h-5 w-5 text-[#FF7139]" />
+                      <div className="text-left">
+                        <p className="font-medium">Products</p>
+                        <p className="text-xs text-gray-500">Manage your product catalog</p>
+                      </div>
+                      <ArrowRight className="h-4 w-4 ml-auto" />
+                    </div>
+                  </Button>
+                </Link>
+
+                <Link href="/offers">
+                  <Button variant="outline" className="w-full justify-start h-auto p-4">
+                    <div className="flex items-center space-x-3">
+                      <Tag className="h-5 w-5 text-[#FF7139]" />
+                      <div className="text-left">
+                        <p className="font-medium">Offers</p>
+                        <p className="text-xs text-gray-500">Create and manage deals</p>
+                      </div>
+                      <ArrowRight className="h-4 w-4 ml-auto" />
+                    </div>
+                  </Button>
+                </Link>
+
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start h-auto p-4" 
+                  disabled
+                >
+                  <div className="flex items-center space-x-3">
+                    <Building className="h-5 w-5 text-gray-400" />
+                    <div className="text-left">
+                      <p className="font-medium text-gray-400">Business Profile</p>
+                      <p className="text-xs text-gray-400">Setup your business</p>
+                    </div>
+                    <ArrowRight className="h-4 w-4 ml-auto text-gray-400" />
+                  </div>
+                </Button>
+
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start h-auto p-4" 
+                  disabled
+                >
+                  <div className="flex items-center space-x-3">
+                    <User className="h-5 w-5 text-gray-400" />
+                    <div className="text-left">
+                      <p className="font-medium text-gray-400">Analytics</p>
+                      <p className="text-xs text-gray-400">View performance metrics</p>
+                    </div>
+                    <ArrowRight className="h-4 w-4 ml-auto text-gray-400" />
+                  </div>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </main>
     </div>
   );
