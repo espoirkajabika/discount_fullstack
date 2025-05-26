@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { getOffers } from '@/lib/offers';
 import { useAuth } from "@/context/AuthContext";
+import { BusinessRoute } from '@/components/ProtectedRoute';
 
 // Import components
 import { Button } from "@/components/ui/button";
@@ -47,7 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export default function OffersPage() {
+function OffersContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isLoggedIn, initialized } = useAuth();
@@ -96,72 +98,54 @@ export default function OffersPage() {
     setError("");
   
     try {
-      // Build query string with parameters
-      const params = new URLSearchParams({
+      // Build query parameters
+      const params = {
         page: pagination.page,
         limit: pagination.limit,
         sortBy: sortBy,
         sortOrder: sortOrder,
-      });
+      };
   
       if (searchTerm) {
-        params.append("search", searchTerm);
+        params.search = searchTerm;
       }
   
       // Add status filter if not 'all'
       if (activeTab !== "all") {
-        params.append("status", activeTab);
+        params.status = activeTab;
       }
   
-      console.log("Fetching offers with params:", params.toString());
-      const response = await fetch(
-        `/api/business/offers?${params.toString()}`,
-        {
-          credentials: "include",
-          cache: "no-store", // Prevent caching
-          headers: {
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache"
-          }
-        }
-      );
+      console.log("Fetching offers with params:", params);
+      const result = await getOffers(params);
 
-      // If unauthorized but we should be logged in, retry
-      if (response.status === 401 && isLoggedIn && retryCount < maxRetries) {
-        console.log(`Auth error detected. Retrying (${retryCount + 1}/${maxRetries})...`);
-        setTimeout(() => {
-          setRetryCount(prev => prev + 1);
-        }, 1000 * (retryCount + 1)); // Exponential backoff
+      if (result.error) {
+        // If unauthorized and we should be logged in, retry
+        if (result.error.includes('401') && isLoggedIn && retryCount < maxRetries) {
+          console.log(`Auth error detected. Retrying (${retryCount + 1}/${maxRetries})...`);
+          setTimeout(() => {
+            setRetryCount(prev => prev + 1);
+          }, 1000 * (retryCount + 1)); // Exponential backoff
+          return;
+        }
+        
+        // More specific error message for unauthorized
+        if (result.error.includes("Unauthorized")) {
+          setError("You need to be logged in to view offers. Please sign in again.");
+        } else {
+          setError(result.error);
+        }
         return;
       }
   
-      // Parse the JSON response
-      const data = await response.json();
-  
-      if (!response.ok) {
-        // More detailed error message
-        const errorMsg = data.error || `Error: ${response.status} ${response.statusText}`;
-        console.error("API Error:", errorMsg, data);
-        throw new Error(errorMsg);
-      }
-  
-      // Use the already parsed data
-      setOffers(data.offers || []);
-      setPagination({
-        page: data.pagination?.page || 1,
-        limit: data.pagination?.limit || 10,
-        total: data.pagination?.total || 0,
-        totalPages: data.pagination?.totalPages || 1,
-      });
+      // Set the data
+      setOffers(result.offers || []);
+      setPagination(prev => ({
+        ...prev,
+        ...result.pagination
+      }));
     } catch (err) {
       console.error("Error fetching offers:", err);
-      
-      // More specific error message for unauthorized
-      if (err.message.includes("Unauthorized")) {
-        setError("You need to be logged in to view offers. Please sign in again.");
-      } else {
-        setError(err.message);
-      }
+      setError("Failed to fetch offers. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -313,7 +297,7 @@ export default function OffersPage() {
       {searchTerm ? (
         <Button onClick={handleClearSearch}>Clear search</Button>
       ) : (
-        <Button onClick={() => router.push("/business/offers/new")}>
+        <Button onClick={() => router.push("/offers/new")}>
           <PlusCircle className="h-4 w-4 mr-2" />
           Create New Offer
         </Button>
@@ -344,8 +328,8 @@ export default function OffersPage() {
   // Offer Card component
   const OfferCard = ({ offer }) => {
     const status = getOfferStatus(offer);
-    const productName = offer.products?.name || "Unknown Product";
-    const productPrice = offer.products?.price || 0;
+    const productName = offer.products?.name || offer.product?.name || "Unknown Product";
+    const productPrice = offer.products?.price || offer.product?.price || 0;
     const discountAmount = (
       (productPrice * offer.discount_percentage) /
       100
@@ -355,14 +339,14 @@ export default function OffersPage() {
     return (
       <div
         className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-        onClick={() => router.push(`/business/offers/${offer.id}`)}
+        onClick={() => router.push(`/offers/${offer.id}`)}
       >
         <div className="p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-3">
               <div className="h-12 w-12 bg-gray-100 rounded-md overflow-hidden flex-shrink-0">
                 <StorageImage
-                  path={offer.products?.image_url}
+                  path={offer.products?.image_url || offer.product?.image_url}
                   alt={productName}
                   className="w-full h-full object-cover"
                   fallbackSize="48x48"
@@ -494,7 +478,7 @@ export default function OffersPage() {
           </p>
         </div>
         <Button
-          onClick={() => router.push("/business/offers/new")}
+          onClick={() => router.push("/offers/new")}
           className="w-full md:w-auto"
         >
           <PlusCircle className="h-4 w-4 mr-2" />
@@ -631,5 +615,13 @@ export default function OffersPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function OffersPage() {
+  return (
+    <BusinessRoute>
+      <OffersContent />
+    </BusinessRoute>
   );
 }

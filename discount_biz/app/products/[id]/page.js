@@ -2,8 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { use } from "react"; // Import the use function
+import { use } from "react";
 import Link from "next/link";
+import { getProduct, deleteProduct } from '@/lib/products';
+import { getProductOffers } from '@/lib/products';
+import { BusinessRoute } from '@/components/ProtectedRoute';
+
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,12 +27,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { StorageImage } from '@/components/ui/storage-image';
 
-export default function ProductDetailsPage({ params }) {
-  // Use the React.use method to unwrap the params
+function ProductDetailsContent({ params }) {
   const id = use(params).id;
   
   const router = useRouter();
@@ -45,23 +47,17 @@ export default function ProductDetailsPage({ params }) {
       setError(null);
 
       try {
-        const response = await fetch(`/api/business/products/${id}`, {
-          credentials: "include", // Include cookies with request
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(
-            errorData.error ||
-              `Failed to fetch product details (Status: ${response.status})`
-          );
+        const result = await getProduct(id);
+        
+        if (result.error) {
+          setError(result.error);
+          return;
         }
-
-        const data = await response.json();
-        setProduct(data.product);
+        
+        setProduct(result.product);
       } catch (err) {
         console.error("Error fetching product:", err);
-        setError(err.message);
+        setError("Failed to fetch product details");
       } finally {
         setIsLoading(false);
       }
@@ -69,20 +65,16 @@ export default function ProductDetailsPage({ params }) {
 
     const fetchOffers = async () => {
       try {
-        const response = await fetch(`/api/business/products/${id}/offers`, {
-          credentials: "include", // Include cookies with request
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || "Failed to fetch product offers");
+        const result = await getProductOffers(id);
+        
+        if (result.error) {
+          console.error("Error fetching offers:", result.error);
+          return;
         }
-
-        const data = await response.json();
-        setOffers(data.offers || []);
+        
+        setOffers(result.offers || []);
       } catch (err) {
         console.error("Error fetching offers:", err);
-        // Don't set error state here, as we still want to show product details
       }
     };
 
@@ -94,17 +86,15 @@ export default function ProductDetailsPage({ params }) {
     setIsDeleting(true);
 
     try {
-      const response = await fetch(`/api/business/products/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete product");
+      const result = await deleteProduct(id);
+      
+      if (result.error) {
+        setError(result.error);
+        return;
       }
 
       // Redirect to products list after successful deletion
-      router.push("/business/products");
+      router.push("/products");
     } catch (err) {
       console.error("Error deleting product:", err);
       setError("Failed to delete product: " + err.message);
@@ -171,7 +161,7 @@ export default function ProductDetailsPage({ params }) {
           <Button
             variant="ghost"
             className="mr-2 p-0 h-auto"
-            onClick={() => router.push("/business/products")}
+            onClick={() => router.push("/products")}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -197,7 +187,7 @@ export default function ProductDetailsPage({ params }) {
           <Button
             variant="ghost"
             className="mr-2 p-0 h-auto"
-            onClick={() => router.push("/business/products")}
+            onClick={() => router.push("/products")}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -213,7 +203,7 @@ export default function ProductDetailsPage({ params }) {
                 variant="outline"
                 size="sm"
                 className="mt-2"
-                onClick={() => router.push("/business/products")}
+                onClick={() => router.push("/products")}
               >
                 Return to products
               </Button>
@@ -231,7 +221,7 @@ export default function ProductDetailsPage({ params }) {
           <Button
             variant="ghost"
             className="mr-2 p-0 h-auto"
-            onClick={() => router.push("/business/products")}
+            onClick={() => router.push("/products")}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -240,7 +230,7 @@ export default function ProductDetailsPage({ params }) {
         <div className="flex space-x-2">
           <Button
             variant="outline"
-            onClick={() => router.push(`/business/products/${id}/edit`)}
+            onClick={() => router.push(`/products/${id}/edit`)}
           >
             <Edit className="h-4 w-4 mr-2" />
             Edit
@@ -314,7 +304,7 @@ export default function ProductDetailsPage({ params }) {
                 <CardTitle>Product Offers</CardTitle>
                 <Button
                   onClick={() =>
-                    router.push(`/business/offers/new?productId=${product.id}`)
+                    router.push(`/offers/new?productId=${product.id}`)
                   }
                   size="sm"
                 >
@@ -335,7 +325,7 @@ export default function ProductDetailsPage({ params }) {
                   <Button
                     onClick={() =>
                       router.push(
-                        `/business/offers/new?productId=${product.id}`
+                        `/offers/new?productId=${product.id}`
                       )
                     }
                   >
@@ -358,7 +348,7 @@ export default function ProductDetailsPage({ params }) {
                           key={offer.id}
                           offer={offer}
                           onClick={() =>
-                            router.push(`/business/offers/${offer.id}`)
+                            router.push(`/offers/${offer.id}`)
                           }
                         />
                       ))}
@@ -380,7 +370,7 @@ export default function ProductDetailsPage({ params }) {
                               key={offer.id}
                               offer={offer}
                               onClick={() =>
-                                router.push(`/business/offers/${offer.id}`)
+                                router.push(`/offers/${offer.id}`)
                               }
                             />
                           ))
@@ -403,7 +393,7 @@ export default function ProductDetailsPage({ params }) {
                               key={offer.id}
                               offer={offer}
                               onClick={() =>
-                                router.push(`/business/offers/${offer.id}`)
+                                router.push(`/offers/${offer.id}`)
                               }
                             />
                           ))
@@ -426,7 +416,7 @@ export default function ProductDetailsPage({ params }) {
                               key={offer.id}
                               offer={offer}
                               onClick={() =>
-                                router.push(`/business/offers/${offer.id}`)
+                                router.push(`/offers/${offer.id}`)
                               }
                             />
                           ))
@@ -449,7 +439,7 @@ export default function ProductDetailsPage({ params }) {
                 <Button
                   className="w-full"
                   onClick={() =>
-                    router.push(`/business/offers/new?productId=${product.id}`)
+                    router.push(`/offers/new?productId=${product.id}`)
                   }
                 >
                   <PlusCircle className="h-4 w-4 mr-2" />
@@ -458,7 +448,7 @@ export default function ProductDetailsPage({ params }) {
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() => router.push(`/business/products/${id}/edit`)}
+                  onClick={() => router.push(`/products/${id}/edit`)}
                 >
                   <Edit className="h-4 w-4 mr-2" />
                   Edit Product
@@ -581,5 +571,13 @@ function OfferCard({ offer, onClick }) {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ProductDetailsPage({ params }) {
+  return (
+    <BusinessRoute>
+      <ProductDetailsContent params={params} />
+    </BusinessRoute>
   );
 }

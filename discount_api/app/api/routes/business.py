@@ -1,7 +1,10 @@
 # app/api/routes/business.py
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from typing import Optional, List
 from datetime import datetime
+import uuid
+import os
+from pathlib import Path
 from app.core.database import supabase
 from app.schemas.business import (
     BusinessCreate, BusinessUpdate, BusinessResponse, BusinessListResponse,
@@ -10,323 +13,79 @@ from app.schemas.business import (
     CategoryResponse, MessageResponse, BusinessUserRegistration
 )
 from app.schemas.user import UserProfile, UserResponse
-from app.schemas.user import UserProfile
 from app.utils.dependencies import get_current_active_user, get_current_business_user
-import uuid
 
 router = APIRouter(prefix="/business", tags=["Business"])
 
 # ============================================================================
-# BUSINESS REGISTRATION & MANAGEMENT
+# PRODUCT MANAGEMENT WITH PAGINATION AND SEARCH
 # ============================================================================
 
-# Add this RIGHT AFTER the router = APIRouter(...) line and BEFORE the existing @router.post("/register")
-
-@router.post("/register-complete", response_model=UserResponse)
-async def register_business_user(registration_data: BusinessUserRegistration):
-    """Register user and business in one step"""
+@router.get("/products", response_model=dict)
+async def list_my_products(
+    current_user: UserProfile = Depends(get_current_business_user),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    sortBy: str = Query("created_at", regex="^(created_at|name|price|updated_at)$"),
+    sortOrder: str = Query("desc", regex="^(asc|desc)$")
+):
+    """List products for the current business with pagination and search"""
     
     try:
-        # Step 1: Register user with Supabase Auth
-        auth_response = supabase.auth.sign_up({
-            "email": registration_data.email,
-            "password": registration_data.password,
-            "options": {
-                "data": {
-                    "first_name": registration_data.first_name,
-                    "last_name": registration_data.last_name,
-                    "phone": registration_data.phone
-                }
-            }
-        })
-        
-        if not auth_response.user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User registration failed"
-            )
-        
-        user_id = auth_response.user.id
-        
-        # Step 2: Create/update user profile
-        profile_data = {
-            "id": user_id,
-            "email": registration_data.email,
-            "first_name": registration_data.first_name,
-            "last_name": registration_data.last_name,
-            "phone": registration_data.phone,
-            "is_business": True  # Mark as business user
-        }
-        
-        # Check if profile exists (from trigger)
-        existing_profile = supabase.table("profiles").select("*").eq("id", user_id).execute()
-        
-        if existing_profile.data:
-            result = supabase.table("profiles").update(profile_data).eq("id", user_id).execute()
-            profile = result.data[0] if result.data else existing_profile.data[0]
-        else:
-            result = supabase.table("profiles").insert(profile_data).execute()
-            profile = result.data[0]
-        
-        # Step 3: Validate category if provided
-        if registration_data.category_id:
-            category_check = supabase.table("categories").select("id").eq("id", str(registration_data.category_id)).execute()
-            if not category_check.data:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid category ID"
-                )
-        
-        # Step 4: Create business profile
-        business_data = {
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "business_name": registration_data.business_name,
-            "business_description": registration_data.business_description,
-            "business_address": registration_data.business_address,
-            "phone_number": registration_data.business_phone,
-            "business_website": registration_data.business_website,
-            "avatar_url": registration_data.avatar_url,
-            "business_hours": registration_data.business_hours,
-            "category_id": str(registration_data.category_id) if registration_data.category_id else None
-        }
-        
-        business_result = supabase.table("businesses").insert(business_data).execute()
+        # Get user's business
+        business_result = supabase.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
         
         if not business_result.data:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Business registration failed"
-            )
-        
-        # Return user response with token
-        return UserResponse(
-            user=UserProfile(**profile),
-            access_token=auth_response.session.access_token,
-            token_type="bearer",
-            expires_in=auth_response.session.expires_in or 3600
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Registration failed: {str(e)}"
-        )
-        
-@router.post("/register", response_model=BusinessResponse)
-async def register_business(
-    business_data: BusinessCreate,
-    current_user: UserProfile = Depends(get_current_active_user)
-):
-    """Register a new business for the current user"""
-    
-    try:
-        # Check if user already has a business
-        existing_business = supabase.table("businesses").select("*").eq("user_id", str(current_user.id)).execute()
-        
-        if existing_business.data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User already has a registered business"
-            )
-        
-        # Validate category exists if provided
-        if business_data.category_id:
-            category_check = supabase.table("categories").select("id").eq("id", str(business_data.category_id)).execute()
-            if not category_check.data:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid category ID"
-                )
-        
-        # Create business
-        business_dict = business_data.model_dump()
-        business_dict["user_id"] = str(current_user.id)
-        business_dict["id"] = str(uuid.uuid4())
-        
-        result = supabase.table("businesses").insert(business_dict).execute()
-        
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create business"
-            )
-        
-        # Update user to business role
-        supabase.table("profiles").update({"is_business": True}).eq("id", str(current_user.id)).execute()
-        
-        # Get business with category info
-        business_with_category = supabase.table("businesses").select(
-            "*, categories(*)"
-        ).eq("id", result.data[0]["id"]).execute()
-        
-        return BusinessResponse(**business_with_category.data[0])
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Business registration failed: {str(e)}"
-        )
-
-
-@router.get("/me", response_model=BusinessResponse)
-async def get_my_business(
-    current_user: UserProfile = Depends(get_current_business_user)
-):
-    """Get current user's business information"""
-    
-    try:
-        result = supabase.table("businesses").select(
-            "*, categories(*)"
-        ).eq("user_id", str(current_user.id)).execute()
-        
-        if not result.data:
-            raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Business not found"
             )
         
-        return BusinessResponse(**result.data[0])
+        business_id = business_result.data[0]["id"]
         
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve business: {str(e)}"
-        )
-
-
-@router.put("/me", response_model=BusinessResponse)
-async def update_my_business(
-    business_update: BusinessUpdate,
-    current_user: UserProfile = Depends(get_current_business_user)
-):
-    """Update current user's business information"""
-    
-    try:
-        # Validate category exists if provided
-        if business_update.category_id:
-            category_check = supabase.table("categories").select("id").eq("id", str(business_update.category_id)).execute()
-            if not category_check.data:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid category ID"
-                )
-        
-        # Update business
-        update_data = business_update.model_dump(exclude_unset=True)
-        update_data["updated_at"] = datetime.utcnow().isoformat()
-        
-        result = supabase.table("businesses").update(update_data).eq("user_id", str(current_user.id)).execute()
-        
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Business not found"
-            )
-        
-        # Get updated business with category info
-        business_with_category = supabase.table("businesses").select(
-            "*, categories(*)"
-        ).eq("id", result.data[0]["id"]).execute()
-        
-        return BusinessResponse(**business_with_category.data[0])
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Business update failed: {str(e)}"
-        )
-
-
-@router.get("/", response_model=BusinessListResponse)
-async def list_businesses(
-    page: int = Query(1, ge=1),
-    size: int = Query(10, ge=1, le=100),
-    category_id: Optional[str] = None,
-    search: Optional[str] = None,
-    verified_only: bool = Query(False)
-):
-    """List all businesses with pagination and filters"""
-    
-    try:
         # Build query
-        query = supabase.table("businesses").select("*, categories(*)", count="exact")
+        query = supabase.table("products").select("*, categories(*)", count="exact").eq("business_id", business_id)
         
-        # Apply filters
-        if category_id:
-            query = query.eq("category_id", category_id)
-        
-        if verified_only:
-            query = query.eq("is_verified", True)
-        
+        # Apply search filter
         if search:
-            query = query.ilike("business_name", f"%{search}%")
+            query = query.or_(f"name.ilike.%{search}%,description.ilike.%{search}%")
+        
+        # Apply sorting
+        desc_order = sortOrder == "desc"
+        query = query.order(sortBy, desc=desc_order)
         
         # Apply pagination
-        offset = (page - 1) * size
-        query = query.range(offset, offset + size - 1)
+        offset = (page - 1) * limit
+        query = query.range(offset, offset + limit - 1)
         
         result = query.execute()
         
         total = result.count if result.count else 0
-        has_next = (page * size) < total
+        total_pages = (total + limit - 1) // limit
         
-        businesses = [BusinessResponse(**business) for business in result.data]
+        products = [ProductResponse(**product) for product in result.data]
         
-        return BusinessListResponse(
-            businesses=businesses,
-            total=total,
-            page=page,
-            size=size,
-            has_next=has_next
-        )
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve businesses: {str(e)}"
-        )
-
-
-@router.get("/{business_id}", response_model=BusinessResponse)
-async def get_business(business_id: str):
-    """Get a specific business by ID"""
-    
-    try:
-        result = supabase.table("businesses").select(
-            "*, categories(*)"
-        ).eq("id", business_id).execute()
-        
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Business not found"
-            )
-        
-        return BusinessResponse(**result.data[0])
+        return {
+            "products": products,
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "totalPages": total_pages
+            }
+        }
         
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve business: {str(e)}"
+            detail=f"Failed to retrieve products: {str(e)}"
         )
 
 
-# ============================================================================
-# PRODUCT MANAGEMENT
-# ============================================================================
-
-@router.post("/products", response_model=ProductResponse)
+@router.post("/products", response_model=dict)
 async def create_product(
     product_data: ProductCreate,
     current_user: UserProfile = Depends(get_current_business_user)
@@ -372,7 +131,7 @@ async def create_product(
             "*, categories(*)"
         ).eq("id", result.data[0]["id"]).execute()
         
-        return ProductResponse(**product_with_category.data[0])
+        return {"product": ProductResponse(**product_with_category.data[0])}
         
     except HTTPException:
         raise
@@ -383,62 +142,7 @@ async def create_product(
         )
 
 
-@router.get("/products", response_model=ProductListResponse)
-async def list_my_products(
-    current_user: UserProfile = Depends(get_current_business_user),
-    page: int = Query(1, ge=1),
-    size: int = Query(10, ge=1, le=100),
-    active_only: bool = Query(True)
-):
-    """List products for the current business"""
-    
-    try:
-        # Get user's business
-        business_result = supabase.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
-        
-        if not business_result.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Business not found"
-            )
-        
-        business_id = business_result.data[0]["id"]
-        
-        # Build query
-        query = supabase.table("products").select("*, categories(*)", count="exact").eq("business_id", business_id)
-        
-        if active_only:
-            query = query.eq("is_active", True)
-        
-        # Apply pagination
-        offset = (page - 1) * size
-        query = query.range(offset, offset + size - 1)
-        
-        result = query.execute()
-        
-        total = result.count if result.count else 0
-        has_next = (page * size) < total
-        
-        products = [ProductResponse(**product) for product in result.data]
-        
-        return ProductListResponse(
-            products=products,
-            total=total,
-            page=page,
-            size=size,
-            has_next=has_next
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve products: {str(e)}"
-        )
-
-
-@router.get("/products/{product_id}", response_model=ProductResponse)
+@router.get("/products/{product_id}", response_model=dict)
 async def get_product(
     product_id: str,
     current_user: UserProfile = Depends(get_current_business_user)
@@ -468,7 +172,7 @@ async def get_product(
                 detail="Product not found"
             )
         
-        return ProductResponse(**result.data[0])
+        return {"product": ProductResponse(**result.data[0])}
         
     except HTTPException:
         raise
@@ -479,7 +183,7 @@ async def get_product(
         )
 
 
-@router.put("/products/{product_id}", response_model=ProductResponse)
+@router.patch("/products/{product_id}", response_model=dict)
 async def update_product(
     product_id: str,
     product_update: ProductUpdate,
@@ -499,15 +203,6 @@ async def update_product(
         
         business_id = business_result.data[0]["id"]
         
-        # Validate category exists if provided
-        if product_update.category_id:
-            category_check = supabase.table("categories").select("id").eq("id", str(product_update.category_id)).execute()
-            if not category_check.data:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid category ID"
-                )
-        
         # Update product
         update_data = product_update.model_dump(exclude_unset=True)
         update_data["updated_at"] = datetime.utcnow().isoformat()
@@ -525,7 +220,7 @@ async def update_product(
             "*, categories(*)"
         ).eq("id", result.data[0]["id"]).execute()
         
-        return ProductResponse(**product_with_category.data[0])
+        return {"product": ProductResponse(**product_with_category.data[0])}
         
     except HTTPException:
         raise
@@ -575,13 +270,187 @@ async def delete_product(
         )
 
 
+# Image upload endpoint
+@router.post("/products/upload-image", response_model=dict)
+async def upload_product_image(
+    image: UploadFile = File(...),
+    current_user: UserProfile = Depends(get_current_business_user)
+):
+    """Upload product image"""
+    
+    try:
+        # Validate file type
+        allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+        if image.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid file type. Only JPEG, PNG, GIF, and WEBP are allowed."
+            )
+        
+        # Validate file size (5MB max)
+        max_size = 5 * 1024 * 1024  # 5MB
+        if len(await image.read()) > max_size:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File too large. Maximum size is 5MB."
+            )
+        
+        # Reset file position
+        await image.seek(0)
+        
+        # Generate unique filename
+        file_extension = image.filename.split('.')[-1] if '.' in image.filename else 'jpg'
+        unique_filename = f"products/{uuid.uuid4()}.{file_extension}"
+        
+        # Upload to Supabase Storage
+        file_content = await image.read()
+        
+        # Upload file to Supabase storage
+        result = supabase.storage.from_("product-images").upload(
+            unique_filename,
+            file_content,
+            {"content-type": image.content_type}
+        )
+        
+        if result.error:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Upload failed: {result.error}"
+            )
+        
+        # Return the storage path (not the full URL)
+        return {
+            "path": unique_filename,
+            "message": "Image uploaded successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Image upload failed: {str(e)}"
+        )
+
+
 # ============================================================================
-# OFFER MANAGEMENT
+# OFFER MANAGEMENT WITH PAGINATION AND SEARCH
 # ============================================================================
 
-@router.post("/offers", response_model=OfferResponse)
+# Update the existing offers schema for frontend compatibility
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
+from decimal import Decimal
+
+class OfferCreateRequest(BaseModel):
+    product_id: str
+    discount_percentage: int
+    discount_code: Optional[str] = None
+    start_date: datetime
+    expiry_date: datetime
+    is_active: bool = True
+    max_claims: Optional[int] = None
+
+
+class OfferUpdateRequest(BaseModel):
+    discount_percentage: Optional[int] = None
+    discount_code: Optional[str] = None
+    start_date: Optional[datetime] = None
+    expiry_date: Optional[datetime] = None
+    is_active: Optional[bool] = None
+    max_claims: Optional[int] = None
+
+
+@router.get("/offers", response_model=dict)
+async def list_my_offers(
+    current_user: UserProfile = Depends(get_current_business_user),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    status: Optional[str] = Query(None, regex="^(active|upcoming|expired|inactive)$"),
+    sortBy: str = Query("created_at", regex="^(created_at|expiry_date|discount_percentage|current_claims)$"),
+    sortOrder: str = Query("desc", regex="^(asc|desc)$")
+):
+    """List offers for the current business with pagination and filters"""
+    
+    try:
+        # Get user's business
+        business_result = supabase.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
+        
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
+        
+        business_id = business_result.data[0]["id"]
+        current_time = datetime.utcnow().isoformat()
+        
+        # Build base query with product info
+        query = supabase.table("offers").select(
+            "*, products(*, categories(*))", 
+            count="exact"
+        ).eq("business_id", business_id)
+        
+        # Apply search filter (search in product name)
+        if search:
+            query = query.or_(f"products.name.ilike.%{search}%,discount_code.ilike.%{search}%")
+        
+        # Apply status filter
+        if status == "active":
+            query = query.eq("is_active", True).gte("expiry_date", current_time).lte("start_date", current_time)
+        elif status == "upcoming":
+            query = query.gt("start_date", current_time)
+        elif status == "expired":
+            query = query.lt("expiry_date", current_time)
+        elif status == "inactive":
+            query = query.eq("is_active", False)
+        
+        # Apply sorting
+        desc_order = sortOrder == "desc"
+        query = query.order(sortBy, desc=desc_order)
+        
+        # Apply pagination
+        offset = (page - 1) * limit
+        query = query.range(offset, offset + limit - 1)
+        
+        result = query.execute()
+        
+        total = result.count if result.count else 0
+        total_pages = (total + limit - 1) // limit
+        
+        # Transform offers to match frontend expectations
+        offers = []
+        for offer in result.data:
+            offer_dict = offer.copy()
+            # Ensure products data is available
+            if not offer_dict.get('products'):
+                offer_dict['products'] = None
+            offers.append(offer_dict)
+        
+        return {
+            "offers": offers,
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "totalPages": total_pages
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve offers: {str(e)}"
+        )
+
+
+@router.post("/offers", response_model=dict)
 async def create_offer(
-    offer_data: OfferCreate,
+    offer_data: OfferCreateRequest,
     current_user: UserProfile = Depends(get_current_business_user)
 ):
     """Create a new offer for the current business"""
@@ -598,19 +467,37 @@ async def create_offer(
         
         business_id = business_result.data[0]["id"]
         
-        # Validate product exists and belongs to business if provided
-        if offer_data.product_id:
-            product_check = supabase.table("products").select("id").eq("id", str(offer_data.product_id)).eq("business_id", business_id).execute()
-            if not product_check.data:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid product ID or product doesn't belong to your business"
-                )
+        # Validate product exists and belongs to business
+        product_check = supabase.table("products").select("id, price").eq("id", offer_data.product_id).eq("business_id", business_id).execute()
+        if not product_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid product ID or product doesn't belong to your business"
+            )
         
-        # Create offer
-        offer_dict = offer_data.model_dump()
-        offer_dict["business_id"] = business_id
-        offer_dict["id"] = str(uuid.uuid4())
+        product_price = float(product_check.data[0]["price"])
+        
+        # Calculate discounted price
+        discount_amount = product_price * (offer_data.discount_percentage / 100)
+        discounted_price = product_price - discount_amount
+        
+        # Create offer with FastAPI-compatible structure
+        offer_dict = {
+            "id": str(uuid.uuid4()),
+            "business_id": business_id,
+            "product_id": offer_data.product_id,
+            "title": f"{offer_data.discount_percentage}% Off",
+            "discount_type": "percentage",
+            "discount_value": offer_data.discount_percentage,
+            "original_price": product_price,
+            "discounted_price": discounted_price,
+            "start_date": offer_data.start_date.isoformat(),
+            "expiry_date": offer_data.expiry_date.isoformat(),
+            "is_active": offer_data.is_active,
+            "max_claims": offer_data.max_claims,
+            "current_claims": 0,
+            "discount_code": offer_data.discount_code
+        }
         
         result = supabase.table("offers").insert(offer_dict).execute()
         
@@ -625,7 +512,7 @@ async def create_offer(
             "*, products(*, categories(*))"
         ).eq("id", result.data[0]["id"]).execute()
         
-        return OfferResponse(**offer_with_product.data[0])
+        return {"offer": offer_with_product.data[0]}
         
     except HTTPException:
         raise
@@ -636,66 +523,7 @@ async def create_offer(
         )
 
 
-@router.get("/offers", response_model=OfferListResponse)
-async def list_my_offers(
-    current_user: UserProfile = Depends(get_current_business_user),
-    page: int = Query(1, ge=1),
-    size: int = Query(10, ge=1, le=100),
-    active_only: bool = Query(True),
-    product_id: Optional[str] = None
-):
-    """List offers for the current business"""
-    
-    try:
-        # Get user's business
-        business_result = supabase.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
-        
-        if not business_result.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Business not found"
-            )
-        
-        business_id = business_result.data[0]["id"]
-        
-        # Build query
-        query = supabase.table("offers").select("*, products(*, categories(*))", count="exact").eq("business_id", business_id)
-        
-        if active_only:
-            query = query.eq("is_active", True)
-        
-        if product_id:
-            query = query.eq("product_id", product_id)
-        
-        # Apply pagination
-        offset = (page - 1) * size
-        query = query.range(offset, offset + size - 1)
-        
-        result = query.execute()
-        
-        total = result.count if result.count else 0
-        has_next = (page * size) < total
-        
-        offers = [OfferResponse(**offer) for offer in result.data]
-        
-        return OfferListResponse(
-            offers=offers,
-            total=total,
-            page=page,
-            size=size,
-            has_next=has_next
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve offers: {str(e)}"
-        )
-
-
-@router.get("/offers/{offer_id}", response_model=OfferResponse)
+@router.get("/offers/{offer_id}", response_model=dict)
 async def get_offer(
     offer_id: str,
     current_user: UserProfile = Depends(get_current_business_user)
@@ -725,7 +553,7 @@ async def get_offer(
                 detail="Offer not found"
             )
         
-        return OfferResponse(**result.data[0])
+        return {"offer": result.data[0]}
         
     except HTTPException:
         raise
@@ -736,10 +564,10 @@ async def get_offer(
         )
 
 
-@router.put("/offers/{offer_id}", response_model=OfferResponse)
+@router.patch("/offers/{offer_id}", response_model=dict)
 async def update_offer(
     offer_id: str,
-    offer_update: OfferUpdate,
+    offer_update: OfferUpdateRequest,
     current_user: UserProfile = Depends(get_current_business_user)
 ):
     """Update an offer owned by the current business"""
@@ -756,17 +584,31 @@ async def update_offer(
         
         business_id = business_result.data[0]["id"]
         
-        # Validate product exists and belongs to business if provided
-        if offer_update.product_id:
-            product_check = supabase.table("products").select("id").eq("id", str(offer_update.product_id)).eq("business_id", business_id).execute()
-            if not product_check.data:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid product ID or product doesn't belong to your business"
-                )
+        # Get existing offer
+        existing_offer = supabase.table("offers").select("*, products(price)").eq("id", offer_id).eq("business_id", business_id).execute()
         
-        # Update offer
+        if not existing_offer.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offer not found"
+            )
+        
+        # Prepare update data
         update_data = offer_update.model_dump(exclude_unset=True)
+        
+        # Recalculate prices if discount percentage changed
+        if offer_update.discount_percentage is not None:
+            product_price = float(existing_offer.data[0]["products"]["price"])
+            discount_amount = product_price * (offer_update.discount_percentage / 100)
+            update_data["discount_value"] = offer_update.discount_percentage
+            update_data["discounted_price"] = product_price - discount_amount
+            update_data["title"] = f"{offer_update.discount_percentage}% Off"
+        
+        # Convert datetime objects to strings
+        if "start_date" in update_data:
+            update_data["start_date"] = update_data["start_date"].isoformat()
+        if "expiry_date" in update_data:
+            update_data["expiry_date"] = update_data["expiry_date"].isoformat()
         
         result = supabase.table("offers").update(update_data).eq("id", offer_id).eq("business_id", business_id).execute()
         
@@ -781,7 +623,7 @@ async def update_offer(
             "*, products(*, categories(*))"
         ).eq("id", result.data[0]["id"]).execute()
         
-        return OfferResponse(**offer_with_product.data[0])
+        return {"offer": offer_with_product.data[0]}
         
     except HTTPException:
         raise
@@ -789,6 +631,52 @@ async def update_offer(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Offer update failed: {str(e)}"
+        )
+
+
+@router.patch("/offers/{offer_id}/status", response_model=dict)
+async def update_offer_status(
+    offer_id: str,
+    status_data: dict,
+    current_user: UserProfile = Depends(get_current_business_user)
+):
+    """Update offer active status"""
+    
+    try:
+        # Get user's business
+        business_result = supabase.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
+        
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
+        
+        business_id = business_result.data[0]["id"]
+        
+        # Update offer status
+        is_active = status_data.get("is_active", False)
+        result = supabase.table("offers").update({"is_active": is_active}).eq("id", offer_id).eq("business_id", business_id).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offer not found"
+            )
+        
+        # Get updated offer with product info
+        offer_with_product = supabase.table("offers").select(
+            "*, products(*, categories(*))"
+        ).eq("id", result.data[0]["id"]).execute()
+        
+        return {"offer": offer_with_product.data[0]}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Status update failed: {str(e)}"
         )
 
 
@@ -832,108 +720,45 @@ async def delete_offer(
 
 
 # ============================================================================
-# PUBLIC ENDPOINTS
+# PRODUCT-OFFER RELATIONSHIP
 # ============================================================================
 
-@router.get("/public/products", response_model=ProductListResponse)
-async def list_public_products(
-    page: int = Query(1, ge=1),
-    size: int = Query(10, ge=1, le=100),
-    category_id: Optional[str] = None,
-    business_id: Optional[str] = None,
-    search: Optional[str] = None
+@router.get("/products/{product_id}/offers", response_model=dict)
+async def get_product_offers(
+    product_id: str,
+    current_user: UserProfile = Depends(get_current_business_user)
 ):
-    """List active products publicly"""
+    """Get all offers for a specific product"""
     
     try:
-        # Build query
-        query = supabase.table("products").select("*, categories(*)", count="exact").eq("is_active", True)
+        # Get user's business
+        business_result = supabase.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
         
-        # Apply filters
-        if category_id:
-            query = query.eq("category_id", category_id)
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
         
-        if business_id:
-            query = query.eq("business_id", business_id)
+        business_id = business_result.data[0]["id"]
         
-        if search:
-            query = query.ilike("name", f"%{search}%")
+        # Verify product belongs to business
+        product_check = supabase.table("products").select("id").eq("id", product_id).eq("business_id", business_id).execute()
+        if not product_check.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Product not found"
+            )
         
-        # Apply pagination
-        offset = (page - 1) * size
-        query = query.range(offset, offset + size - 1)
+        # Get offers for this product
+        result = supabase.table("offers").select("*").eq("product_id", product_id).eq("business_id", business_id).execute()
         
-        result = query.execute()
+        return {"offers": result.data}
         
-        total = result.count if result.count else 0
-        has_next = (page * size) < total
-        
-        products = [ProductResponse(**product) for product in result.data]
-        
-        return ProductListResponse(
-            products=products,
-            total=total,
-            page=page,
-            size=size,
-            has_next=has_next
-        )
-        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve products: {str(e)}"
-        )
-
-
-@router.get("/public/offers", response_model=OfferListResponse)
-async def list_public_offers(
-    page: int = Query(1, ge=1),
-    size: int = Query(10, ge=1, le=100),
-    business_id: Optional[str] = None,
-    product_id: Optional[str] = None,
-    discount_type: Optional[str] = None
-):
-    """List active offers publicly"""
-    
-    try:
-        current_time = datetime.utcnow().isoformat()
-        
-        # Build query - only active offers within date range
-        query = supabase.table("offers").select(
-            "*, products(*, categories(*))", count="exact"
-        ).eq("is_active", True).gte("expiry_date", current_time).lte("start_date", current_time)
-        
-        # Apply filters
-        if business_id:
-            query = query.eq("business_id", business_id)
-        
-        if product_id:
-            query = query.eq("product_id", product_id)
-        
-        if discount_type:
-            query = query.eq("discount_type", discount_type)
-        
-        # Apply pagination
-        offset = (page - 1) * size
-        query = query.range(offset, offset + size - 1)
-        
-        result = query.execute()
-        
-        total = result.count if result.count else 0
-        has_next = (page * size) < total
-        
-        offers = [OfferResponse(**offer) for offer in result.data]
-        
-        return OfferListResponse(
-            offers=offers,
-            total=total,
-            page=page,
-            size=size,
-            has_next=has_next
-        )
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve offers: {str(e)}"
+            detail=f"Failed to retrieve product offers: {str(e)}"
         )

@@ -3,11 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { getProducts } from '@/lib/products';
+import { useAuth } from '@/context/AuthContext';
+import { BusinessRoute } from '@/components/ProtectedRoute';
 
 // Import components
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ChevronLeft, 
@@ -25,16 +28,14 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { StorageImage } from '@/components/ui/storage-image';
 
-export default function ProductsPage() {
+function ProductsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -79,38 +80,32 @@ export default function ProductsPage() {
     setError('');
     
     try {
-      // Build query string with all parameters
-      const params = new URLSearchParams({
+      const params = {
         page: pagination.page,
         limit: pagination.limit,
         sortBy: sortBy,
         sortOrder: sortOrder,
-      });
+      };
       
       if (searchTerm) {
-        params.append('search', searchTerm);
+        params.search = searchTerm;
       }
       
-      const response = await fetch(`/api/business/products?${params.toString()}`, {
-        credentials: 'include',
-      });
+      const result = await getProducts(params);
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch products');
+      if (result.error) {
+        setError(result.error);
+        return;
       }
       
-      const data = await response.json();
-      setProducts(data.products);
-      setPagination({
-        page: data.pagination.page,
-        limit: data.pagination.limit,
-        total: data.pagination.total,
-        totalPages: data.pagination.totalPages,
-      });
+      setProducts(result.products);
+      setPagination(prev => ({
+        ...prev,
+        ...result.pagination
+      }));
     } catch (err) {
       console.error('Error fetching products:', err);
-      setError(err.message);
+      setError('Failed to fetch products. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -147,7 +142,10 @@ export default function ProductsPage() {
     }
     
     setPagination(prev => ({ ...prev, page: 1 })); // Reset to page 1 on sort change
-    updateUrlParams({ sortBy: newSortBy, sortOrder: newSortBy === sortBy ? (sortOrder === 'asc' ? 'desc' : 'asc') : 'desc' });
+    updateUrlParams({ 
+      sortBy: newSortBy, 
+      sortOrder: newSortBy === sortBy ? (sortOrder === 'asc' ? 'desc' : 'asc') : 'desc' 
+    });
   };
 
   // Update URL parameters
@@ -209,7 +207,7 @@ export default function ProductsPage() {
       {searchTerm ? (
         <Button onClick={handleClearSearch}>Clear search</Button>
       ) : (
-        <Button onClick={() => router.push('/business/products/new')}>
+        <Button onClick={() => router.push('/products/new')}>
           <PlusCircle className="h-4 w-4 mr-2" />
           Add Product
         </Button>
@@ -250,7 +248,7 @@ export default function ProductsPage() {
   const ProductCardGrid = ({ product }) => (
     <div 
       className="col-span-1 rounded-lg border overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-      onClick={() => router.push(`/business/products/${product.id}`)}
+      onClick={() => router.push(`/products/${product.id}`)}
     >
       <div className="aspect-square bg-gray-100 relative">
         <StorageImage
@@ -277,7 +275,7 @@ export default function ProductsPage() {
   const ProductRowList = ({ product }) => (
     <div 
       className="flex flex-col sm:flex-row items-start sm:items-center p-4 border rounded-lg mb-3 hover:shadow-md transition-shadow cursor-pointer"
-      onClick={() => router.push(`/business/products/${product.id}`)}
+      onClick={() => router.push(`/products/${product.id}`)}
     >
       <div className="w-full sm:w-20 h-20 rounded bg-gray-100 overflow-hidden mr-4 mb-4 sm:mb-0 flex-shrink-0">
         <StorageImage
@@ -384,7 +382,7 @@ export default function ProductsPage() {
           </p>
         </div>
         <Button 
-          onClick={() => router.push('/business/products/new')}
+          onClick={() => router.push('/products/new')}
           className="w-full md:w-auto"
         >
           <PlusCircle className="h-4 w-4 mr-2" />
@@ -527,5 +525,13 @@ export default function ProductsPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <BusinessRoute>
+      <ProductsContent />
+    </BusinessRoute>
   );
 }
