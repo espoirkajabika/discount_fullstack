@@ -5,7 +5,8 @@ from datetime import datetime
 import uuid
 import os
 from pathlib import Path
-from app.core.database import supabase
+from app.core.database import supabase, supabase_admin
+from app.core.config import settings 
 from app.schemas.business import (
     BusinessCreate, BusinessUpdate, BusinessResponse, BusinessListResponse,
     ProductCreate, ProductUpdate, ProductResponse, ProductListResponse,
@@ -271,57 +272,200 @@ async def delete_product(
 
 
 # Image upload endpoint
+# Updated upload endpoint in app/api/routes/business.py
+
+from app.utils.image_utils import compress_image, get_image_info, validate_image_file, create_thumbnail
+
 @router.post("/products/upload-image", response_model=dict)
 async def upload_product_image(
     image: UploadFile = File(...),
     current_user: UserProfile = Depends(get_current_business_user)
 ):
-    """Upload product image"""
+    """Upload product image with automatic compression and validation"""
     
     try:
-        # Validate file type
-        allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
-        if image.content_type not in allowed_types:
+        # Validate file type at upload level
+        allowed_content_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+        if image.content_type not in allowed_content_types:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid file type. Only JPEG, PNG, GIF, and WEBP are allowed."
             )
         
-        # Validate file size (5MB max)
-        max_size = 5 * 1024 * 1024  # 5MB
-        if len(await image.read()) > max_size:
+        # Read file content
+        original_data = await image.read()
+        
+        # Validate the actual image data
+        is_valid, validation_message = validate_image_file(original_data)
+        if not is_valid:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File too large. Maximum size is 5MB."
+                detail=f"Invalid image: {validation_message}"
             )
         
-        # Reset file position
-        await image.seek(0)
+        # Get original image info
+        original_info = get_image_info(original_data)
+        print(f"Original image info: {original_info}")
         
-        # Generate unique filename
-        file_extension = image.filename.split('.')[-1] if '.' in image.filename else 'jpg'
-        unique_filename = f"products/{uuid.uuid4()}.{file_extension}"
+        # Set size limit for Supabase (5MB max, but compress to 2MB for better performance)
+        max_size = 2 * 1024 * 1024  # 2MB
         
-        # Upload to Supabase Storage
-        file_content = await image.read()
+        # Compress image if necessary
+        if len(original_data) > max_size or original_info.get('width', 0) > 1920:
+            print(f"Compressing image from {len(original_data)} bytes...")
+            file_content, compression_info = compress_image(
+                original_data, 
+                max_size_bytes=max_size,
+                quality=85,
+                max_dimension=1920
+            )
+            print(f"Compression info: {compression_info}")
+        else:
+            file_content = original_data
+            compression_info = {
+                "original_size": len(original_data),
+                "compressed_size": len(original_data),
+                "compression_ratio": 0,
+                "message": "No compression needed"
+            }
         
-        # Upload file to Supabase storage
-        result = supabase.storage.from_("product-images").upload(
-            unique_filename,
-            file_content,
-            {"content-type": image.content_type}
-        )
+        # Final size check
+        if len(file_content) > 5 * 1024 * 1024:  # Supabase hard limit
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Image too large even after compression. Please use a smaller image."
+            )
         
-        if result.error:
+        # Generate unique filename (always .jpg after compression)
+        unique_filename = f"businesses/{str(current_user.id)}/{uuid.uuid4()}.jpg"
+        
+        print(f"Uploading: {unique_filename} ({len(file_content)} bytes)")
+        
+        # Upload using direct HTTP request
+        try:
+            import requests
+            
+            upload_url = f"{settings.supabase_url}/storage/v1/object/product-images/{unique_filename}"
+            
+            headers = {
+                "Authorization": f"Bearer {settings.supabase_service_role_key}",
+                "Content-Type": "image/jpeg",
+                "Cache-Control": "3600"
+            }
+            
+            response = requests.post(upload_url, data=file_content, headers=headers)
+            
+            if response.status_code not in [200, 201]:
+                raise Exception(f"Upload failed: {response.status_code} - {response.text}")
+            
+            print("✅ Upload successful!")
+            
+        except Exception as upload_error:
+            print(f"❌ Upload failed: {upload_error}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Upload failed: {result.error}"
+                detail=f"Upload failed: {str(upload_error)}"
             )
         
-        # Return the storage path (not the full URL)
-        return {
+        # Generate public URL
+        public_url = f"{settings.supabase_url}/storage/v1/object/public/product-images/{unique_filename}"
+        
+        # Create response with detailed info
+        response_data = {
             "path": unique_filename,
-            "message": "Image uploaded successfully"
+            "url": public_url,
+            "message": "Image uploaded successfully",
+            "original_info": original_info,
+            "compression_info": compression_info
+        }
+        
+        # Only include compression details if compression was applied
+        if compression_info.get("compression_ratio", 0) > 0:
+            response_data["compression_applied"] = True
+            response_data["size_reduction"] = f"{compression_info['compression_ratio']:.1f}%"
+        else:
+            response_data["compression_applied"] = False
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Image upload failed: {str(e)}"
+        )
+
+
+# Optional: Add thumbnail generation endpoint
+@router.post("/products/upload-image-with-thumbnail", response_model=dict)
+async def upload_product_image_with_thumbnail(
+    image: UploadFile = File(...),
+    current_user: UserProfile = Depends(get_current_business_user)
+):
+    """Upload product image and create thumbnail"""
+    
+    try:
+        # ... (same validation and compression as above)
+        original_data = await image.read()
+        
+        # Validate and compress main image
+        is_valid, validation_message = validate_image_file(original_data)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid image: {validation_message}"
+            )
+        
+        max_size = 2 * 1024 * 1024  # 2MB
+        file_content, compression_info = compress_image(original_data, max_size)
+        
+        # Create thumbnail
+        thumbnail_data = create_thumbnail(original_data, size=(300, 300))
+        
+        # Generate filenames
+        base_filename = f"businesses/{str(current_user.id)}/{uuid.uuid4()}"
+        main_filename = f"{base_filename}.jpg"
+        thumb_filename = f"{base_filename}_thumb.jpg"
+        
+        # Upload both files
+        import requests
+        
+        upload_results = {}
+        
+        # Upload main image
+        main_url = f"{settings.supabase_url}/storage/v1/object/product-images/{main_filename}"
+        main_response = requests.post(main_url, data=file_content, headers={
+            "Authorization": f"Bearer {settings.supabase_service_role_key}",
+            "Content-Type": "image/jpeg"
+        })
+        
+        if main_response.status_code in [200, 201]:
+            upload_results["main_image"] = {
+                "path": main_filename,
+                "url": f"{settings.supabase_url}/storage/v1/object/public/product-images/{main_filename}"
+            }
+        
+        # Upload thumbnail
+        thumb_url = f"{settings.supabase_url}/storage/v1/object/product-images/{thumb_filename}"
+        thumb_response = requests.post(thumb_url, data=thumbnail_data, headers={
+            "Authorization": f"Bearer {settings.supabase_service_role_key}",
+            "Content-Type": "image/jpeg"
+        })
+        
+        if thumb_response.status_code in [200, 201]:
+            upload_results["thumbnail"] = {
+                "path": thumb_filename,
+                "url": f"{settings.supabase_url}/storage/v1/object/public/product-images/{thumb_filename}"
+            }
+        
+        return {
+            "message": "Images uploaded successfully",
+            "uploads": upload_results,
+            "compression_info": compression_info
         }
         
     except HTTPException:
@@ -329,7 +473,7 @@ async def upload_product_image(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Image upload failed: {str(e)}"
+            detail=f"Upload failed: {str(e)}"
         )
 
 

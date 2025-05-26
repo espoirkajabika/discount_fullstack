@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     # Supabase Configuration
     supabase_url: str
     supabase_anon_key: str
-    supabase_service_role_key: str
+    supabase_service_role_key: str  # This should match your .env
     
     # Database Configuration
     database_url: str
@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        # Map environment variables to field names
+        env_aliases = {
+            'supabase_service_role_key': 'SUPABASE_SERVICE_KEY'  # Map your env var name
+        }
 
 
 settings = Settings()
