@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { updatePassword } from '@/lib/auth';
 
@@ -11,10 +11,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle, Lock, EyeOff, Eye } from 'lucide-react';
+import { CheckCircle, Lock, EyeOff, Eye, AlertTriangle } from 'lucide-react';
 
 export default function UpdatePassword() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -24,6 +25,17 @@ export default function UpdatePassword() {
     password: false,
     confirmPassword: false
   });
+  const [token, setToken] = useState('');
+
+  useEffect(() => {
+    // Get reset token from URL parameters
+    const resetToken = searchParams.get('token');
+    if (!resetToken) {
+      setError('Invalid or missing reset token. Please request a new password reset.');
+      return;
+    }
+    setToken(resetToken);
+  }, [searchParams]);
 
   const validateForm = () => {
     if (password !== confirmPassword) {
@@ -33,6 +45,11 @@ export default function UpdatePassword() {
 
     if (password.length < 6) {
       setError('Password must be at least 6 characters long');
+      return false;
+    }
+
+    if (!token) {
+      setError('Invalid reset token. Please request a new password reset.');
       return false;
     }
 
@@ -57,7 +74,9 @@ export default function UpdatePassword() {
     setError('');
 
     try {
-      const result = await updatePassword(password);
+      // Note: You'll need to modify this based on your FastAPI implementation
+      // This assumes you have an endpoint that accepts the token and new password
+      const result = await updatePassword(password, token);
       
       if (result.error) {
         setError(result.error);
@@ -67,15 +86,44 @@ export default function UpdatePassword() {
       setSuccess(true);
       // Redirect to login after 3 seconds
       setTimeout(() => {
-        router.push('/business/auth/login?reset=success');
+        router.push('/auth/login?reset=success');
       }, 3000);
     } catch (err) {
-      setError('Failed to update password. Please try again.');
+      setError('Failed to update password. Please try again or request a new reset link.');
       console.error('Update password error:', err);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Show error if no token
+  if (!token && !error) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#0E2F5A] px-4 py-8">
+        <div className="w-full max-w-md">
+          <Card className="rounded-xl shadow-xl bg-white">
+            <CardContent className="pt-6 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <CardTitle className="mt-3 text-xl text-gray-900">Invalid Reset Link</CardTitle>
+              <CardDescription className="mt-2">
+                This password reset link is invalid or has expired. Please request a new one.
+              </CardDescription>
+              <Button 
+                className="mt-4 bg-[#FF7139] hover:bg-[#e6632e] text-white"
+                asChild
+              >
+                <Link href="/auth/reset-password">
+                  Request New Reset Link
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#0E2F5A] px-4 py-8">
@@ -95,7 +143,7 @@ export default function UpdatePassword() {
                 className="mt-4 text-[#FF7139] hover:underline"
                 asChild
               >
-                <Link href="/business/auth/login">
+                <Link href="/auth/login">
                   Go to login
                 </Link>
               </Button>
@@ -114,6 +162,7 @@ export default function UpdatePassword() {
               <CardContent className="px-6 py-4">
                 {error && (
                   <Alert variant="destructive" className="mb-4">
+                    <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
@@ -138,6 +187,7 @@ export default function UpdatePassword() {
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Create a new password"
                         className="pl-8 pr-10"
+                        disabled={isLoading}
                       />
                       <button
                         type="button"
@@ -169,6 +219,7 @@ export default function UpdatePassword() {
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="Confirm your new password"
                         className="pl-8 pr-10"
+                        disabled={isLoading}
                       />
                       <button
                         type="button"
@@ -184,11 +235,19 @@ export default function UpdatePassword() {
                   <Button
                     type="submit"
                     className="w-full h-12 bg-[#FF7139] hover:bg-[#e6632e] text-white text-md font-semibold mt-4"
-                    disabled={isLoading}
+                    disabled={isLoading || !password || !confirmPassword}
                   >
                     {isLoading ? 'Updating password...' : 'Update password'}
                   </Button>
                 </form>
+
+                <div className="mt-4 text-center">
+                  <Button variant="link" className="text-gray-600" asChild>
+                    <Link href="/auth/login">
+                      Back to login
+                    </Link>
+                  </Button>
+                </div>
               </CardContent>
             </>
           )}

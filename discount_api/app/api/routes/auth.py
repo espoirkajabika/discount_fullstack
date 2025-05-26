@@ -208,3 +208,123 @@ async def refresh_token(current_user: UserProfile = Depends(get_current_active_u
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Token refresh failed: {str(e)}"
         )
+
+
+# Add these endpoints to your existing discount_api/app/api/routes/auth.py
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password_request(email_data: dict):
+    """Request password reset email"""
+    
+    try:
+        email = email_data.get("email")
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email is required"
+            )
+        
+        # Check if user exists
+        result = supabase.table("profiles").select("*").eq("email", email).execute()
+        
+        if not result.data:
+            # Don't reveal if email exists or not for security
+            return MessageResponse(message="If an account with that email exists, a reset link has been sent.")
+        
+        # Use Supabase Auth to send reset email
+        reset_response = supabase.auth.reset_password_email(email)
+        
+        return MessageResponse(message="If an account with that email exists, a reset link has been sent.")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Don't reveal internal errors
+        return MessageResponse(message="If an account with that email exists, a reset link has been sent.")
+
+
+@router.put("/update-password", response_model=MessageResponse)
+async def update_password_with_token(password_data: dict):
+    """Update password using reset token"""
+    
+    try:
+        new_password = password_data.get("password")
+        access_token = password_data.get("access_token")  # From reset email
+        
+        if not new_password or not access_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password and access token are required"
+            )
+        
+        if len(new_password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password must be at least 6 characters long"
+            )
+        
+        # Use Supabase to update password
+        # Note: This requires the access_token from the reset email
+        supabase.auth.update_user(
+            {"password": new_password},
+            access_token=access_token
+        )
+        
+        return MessageResponse(message="Password updated successfully")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update password"
+        )
+
+
+@router.put("/change-password", response_model=MessageResponse)
+async def change_password(
+    password_data: dict,
+    current_user: UserProfile = Depends(get_current_active_user)
+):
+    """Change password for authenticated user"""
+    
+    try:
+        current_password = password_data.get("current_password")
+        new_password = password_data.get("new_password")
+        
+        if not current_password or not new_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password and new password are required"
+            )
+        
+        if len(new_password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="New password must be at least 6 characters long"
+            )
+        
+        # Verify current password by attempting login
+        auth_check = supabase.auth.sign_in_with_password({
+            "email": current_user.email,
+            "password": current_password
+        })
+        
+        if not auth_check.user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password is incorrect"
+            )
+        
+        # Update password
+        supabase.auth.update_user({"password": new_password})
+        
+        return MessageResponse(message="Password changed successfully")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to change password"
+        )

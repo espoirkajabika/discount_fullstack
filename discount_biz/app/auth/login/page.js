@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from '@/lib/auth';
 
 // Import shadcn components
@@ -13,15 +13,29 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // Icons
-import { Mail, Lock, EyeOff, Eye } from 'lucide-react';
+import { Mail, Lock, EyeOff, Eye, CheckCircle } from 'lucide-react';
 
 export default function BusinessLogin() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    // Check for success messages from URL params
+    const registered = searchParams.get('registered');
+    const reset = searchParams.get('reset');
+
+    if (registered === 'true') {
+      setSuccessMessage('Account created successfully! Please log in.');
+    } else if (reset === 'success') {
+      setSuccessMessage('Password updated successfully! Please log in with your new password.');
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,14 +50,14 @@ export default function BusinessLogin() {
         return;
       }
       
-      // Check if the account is suspended
-      if (result.error && result.business?.subscription_status === 'suspended') {
-        setError('This business account has been suspended. Please contact support.');
+      // Check if the user has business privileges
+      if (result.user && !result.user.is_business) {
+        setError('This account is not registered as a business. Please use the customer login or register a business account.');
         return;
       }
 
       // Redirect to dashboard on successful login
-      router.push('/business/dashboard');
+      router.push('/dashboard');
     } catch (err) {
       setError('Failed to sign in. Please check your credentials and try again.');
       console.error('Login error:', err);
@@ -63,7 +77,7 @@ export default function BusinessLogin() {
             <CardDescription className="text-sm text-gray-600">
               First time logging in?{' '}
               <Link 
-                href="/business/auth/signup" 
+                href="/auth/signup" 
                 className="text-[#FF7139] font-semibold italic hover:underline"
               >
                 Sign up
@@ -72,6 +86,15 @@ export default function BusinessLogin() {
           </CardHeader>
 
           <CardContent className="px-6 py-4">
+            {successMessage && (
+              <Alert className="mb-4 border-green-200 bg-green-50">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">
+                  {successMessage}
+                </AlertDescription>
+              </Alert>
+            )}
+
             {error && (
               <Alert variant="destructive" className="mb-4">
                 <AlertDescription>{error}</AlertDescription>
@@ -108,7 +131,7 @@ export default function BusinessLogin() {
                     Password
                   </Label>
                   <Link 
-                    href="/business/auth/reset-password" 
+                    href="/auth/reset-password" 
                     className="text-sm text-[#FF7139] hover:underline italic"
                   >
                     Forgot password?

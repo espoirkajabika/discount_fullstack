@@ -17,13 +17,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, AlertTriangle } from 'lucide-react';
 
 export default function ResetPassword() {
-  const [email, setEmail]         = useState('');
-  const [isSubmitted, setDone]    = useState(false);
-  const [error, setError]         = useState('');
-  const [isLoading, setLoading]   = useState(false);
+  const [email, setEmail] = useState('');
+  const [isSubmitted, setDone] = useState(false);
+  const [error, setError] = useState('');
+  const [isLoading, setLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -32,10 +32,12 @@ export default function ResetPassword() {
 
     try {
       const result = await resetPassword(email);
+      
       if (result.error) {
         setError(result.error);
         return;
       }
+      
       setDone(true);
     } catch (err) {
       setError('Failed to send reset email. Please try again.');
@@ -66,12 +68,26 @@ export default function ResetPassword() {
               </CardTitle>
               <CardDescription className="mt-2 text-gray-600">
                 We&apos;ve sent a link to <span className="font-medium">{email}</span>.
-                Please check your inbox.
+                Please check your inbox and follow the instructions.
               </CardDescription>
 
-              <Button variant="link" className="mt-4 text-[#FF7139]" asChild>
-                <Link href="/business/auth/login">Return to login</Link>
-              </Button>
+              <div className="mt-6 space-y-3">
+                <Button variant="outline" className="w-full" asChild>
+                  <Link href="/auth/login">Return to login</Link>
+                </Button>
+                
+                <Button 
+                  variant="link" 
+                  className="w-full text-[#FF7139]"
+                  onClick={() => {
+                    setDone(false);
+                    setEmail('');
+                    setError('');
+                  }}
+                >
+                  Send another email
+                </Button>
+              </div>
             </CardContent>
           ) : (
             <>
@@ -79,7 +95,7 @@ export default function ResetPassword() {
               <CardHeader>
                 <CardTitle className="text-gray-900">Reset password</CardTitle>
                 <CardDescription className="text-gray-600">
-                  Enter your email and we&apos;ll send you a reset link.
+                  Enter your email address and we&apos;ll send you a reset link.
                 </CardDescription>
               </CardHeader>
 
@@ -87,6 +103,7 @@ export default function ResetPassword() {
               <CardContent>
                 {error && (
                   <Alert variant="destructive" className="mb-4">
+                    <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
@@ -101,13 +118,15 @@ export default function ResetPassword() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Enter your email address"
+                      disabled={isLoading}
                     />
                   </div>
 
                   <Button
                     type="submit"
                     className="w-full bg-[#FF7139] hover:bg-[#e6632e] text-white"
-                    disabled={isLoading}
+                    disabled={isLoading || !email.trim()}
                   >
                     {isLoading ? 'Sending…' : 'Send reset link'}
                   </Button>
@@ -117,12 +136,27 @@ export default function ResetPassword() {
               {/* Footer link */}
               <CardFooter className="justify-center pb-6">
                 <Button variant="link" className="text-[#FF7139]" asChild>
-                  <Link href="/business/auth/login">Back to login</Link>
+                  <Link href="/auth/login">Back to login</Link>
                 </Button>
               </CardFooter>
             </>
           )}
         </Card>
+
+        {/* Additional help */}
+        {!isSubmitted && (
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-300">
+              Don&apos;t have an account?{' '}
+              <Link 
+                href="/auth/signup" 
+                className="text-[#FF7139] hover:underline font-semibold"
+              >
+                Sign up here
+              </Link>
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

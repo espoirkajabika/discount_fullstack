@@ -10,7 +10,7 @@ export default function BusinessLandingPage() {
 
   useEffect(() => {
     // Redirect to dashboard
-    router.push('/business/dashboard');
+    router.push('/dashboard');
   }, [router]);
 
   return (

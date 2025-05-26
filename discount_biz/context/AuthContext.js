@@ -1,149 +1,151 @@
-// context/AuthContext.js
-"use client"
+'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useRouter } from 'next/navigation';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import { getUser, getToken, getCurrentUser, signOut } from '@/lib/auth';
 
-const AuthContext = createContext();
+const AuthContext = createContext({});
 
-export function AuthProvider({ children }) {
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [business, setBusiness] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const router = useRouter();
-  
-  // Initialize Supabase client
-  const supabase = createClientComponentClient({
-    options: {
-      persistSession: true,
-      autoRefreshToken: true,
-    }
-  });
+  const pathname = usePathname();
 
-  useEffect(() => {
-    // Function to fetch session data from API
-    const fetchSessionFromAPI = async () => {
-      try {
-        console.log('Fetching session from API');
-        const response = await fetch('/api/business/auth/session', {
-          credentials: 'include', // Important for cookies
-          cache: 'no-store', // Prevent caching
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache'
-          }
-        });
-        
-        if (!response.ok) {
-          console.log('Session API returned non-OK response:', response.status);
-          // Clear session state if unauthorized
-          setUser(null);
-          setBusiness(null);
-          setIsLoggedIn(false);
-          return false;
-        }
-        
-        const data = await response.json();
-        console.log('Session API response:', data.authenticated ? 'Authenticated' : 'Not authenticated');
-        
-        if (data.authenticated) {
-          setUser(data.user);
-          setBusiness(data.business);
-          setIsLoggedIn(true);
-          return true;
-        } else {
-          setUser(null);
-          setBusiness(null);
-          setIsLoggedIn(false);
-          return false;
-        }
-      } catch (error) {
-        console.error("Error fetching session from API:", error);
-        setUser(null);
-        setBusiness(null);
-        setIsLoggedIn(false);
-        return false;
-      } finally {
-        setLoading(false);
-        setInitialized(true);
-      }
-    };
+  // Public routes that don't require authentication
+  const publicRoutes = [
+    '/auth/login',
+    '/auth/signup',
+    '/auth/reset-password',
+    '/auth/reset-password/update',
+    '/',
+    '/about',
+    '/contact'
+  ];
 
-    // Check auth status on mount and setup auth state change listener
-    const setupAuth = async () => {
-      try {
-        // First try to get session from API
-        await fetchSessionFromAPI();
-        
-        // Setup auth state change listener
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          async (event, session) => {
-            console.log("Auth state changed:", event, session?.user?.email || null);
-            
-            if (event === 'SIGNED_IN') {
-              console.log('User signed in', session?.user?.email);
-              await fetchSessionFromAPI();
-            } else if (event === 'TOKEN_REFRESHED') {
-              console.log('Token refreshed');
-              await fetchSessionFromAPI();
-            } else if (event === 'SIGNED_OUT') {
-              console.log('User signed out');
-              setUser(null);
-              setBusiness(null);
-              setIsLoggedIn(false);
-              
-              // Only redirect if we're not already on an auth page
-              const currentPath = window.location.pathname;
-              if (!currentPath.includes('/business/auth/')) {
-                router.push('/business/auth/login');
-              }
-            }
-          }
-        );
-        
-        // Return unsubscribe function
-        return () => {
-          subscription.unsubscribe();
-        };
-      } catch (error) {
-        console.error("Error setting up auth:", error);
-        setLoading(false);
-        setInitialized(true);
-      }
-    };
+  // Routes that require business role
+  const businessRoutes = [
+    '/dashboard',
+    '/profile',
+    '/products',
+    '/offers',
+    '/analytics'
+  ];
 
-    const unsubscribe = setupAuth();
-    
-    // Cleanup function
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
-  }, [router, supabase]);
-  
-  // Show loading state until authentication is checked
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-spin h-12 w-12 border-b-2 border-blue-600 rounded-full"></div>
-      </div>
-    );
-  }
-
-  // Value to share through context
-  const value = {
-    user,
-    business,
-    isLoggedIn,
-    loading,
-    initialized
+  const isPublicRoute = (path) => {
+    return publicRoutes.some(route => path.startsWith(route));
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
+  const requiresBusinessRole = (path) => {
+    return businessRoutes.some(route => path.startsWith(route));
+  };
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
+  const initializeAuth = async () => {
+    try {
+      const token = getToken();
+      const storedUser = getUser();
+
+      if (token && storedUser) {
+        // Verify token is still valid by fetching current user
+        const result = await getCurrentUser();
+        
+        if (result.user) {
+          setUser(result.user);
+        } else {
+          // Token is invalid, clear stored data
+          await signOut();
+          setUser(null);
+        }
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.error('Auth initialization error:', error);
+      setUser(null);
+    } finally {
+      setLoading(false);
+      setInitialized(true);
+    }
+  };
+
+  useEffect(() => {
+    initializeAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!initialized) return;
+
+    const handleRouteProtection = () => {
+      const isAuthenticated = !!user;
+      const currentPath = pathname;
+
+      // If user is not authenticated and trying to access protected route
+      if (!isAuthenticated && !isPublicRoute(currentPath)) {
+        router.push('/auth/login');
+        return;
+      }
+
+      // If user is authenticated but trying to access auth pages
+      if (isAuthenticated && (currentPath.startsWith('/auth'))) {
+        router.push('/dashboard');
+        return;
+      }
+
+      // If user is authenticated but doesn't have business role for business routes
+      if (isAuthenticated && requiresBusinessRole(currentPath) && !user.is_business) {
+        router.push('/unauthorized');
+        return;
+      }
+    };
+
+    handleRouteProtection();
+  }, [user, pathname, initialized, router]);
+
+  const login = (userData) => {
+    setUser(userData);
+  };
+
+  const logout = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setUser(null);
+      router.push('/auth/login');
+    }
+  };
+
+  const updateUser = (updatedUser) => {
+    setUser(updatedUser);
+  };
+
+  const value = {
+    user,
+    loading,
+    initialized,
+    login,
+    logout,
+    updateUser,
+    isAuthenticated: !!user,
+    isBusiness: !!user?.is_business,
+    isAdmin: !!user?.is_admin
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export default AuthContext;
