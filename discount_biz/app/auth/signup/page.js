@@ -15,9 +15,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
 
 // Icons
-import { EyeOff, Eye, Lock } from 'lucide-react';
+import { EyeOff, Eye, Lock, Building2, User, Mail, Phone, MapPin, Globe, ArrowLeft, ArrowRight } from 'lucide-react';
 
 export default function BusinessSignup() {
   const router = useRouter();
@@ -172,29 +173,58 @@ export default function BusinessSignup() {
     }
   };
 
+  // Calculate progress based on active tab
+  const getProgress = () => {
+    switch (activeTab) {
+      case 'account': return 33;
+      case 'business': return 66;
+      case 'details': return 100;
+      default: return 33;
+    }
+  };
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#0E2F5A] px-4 py-8">
-      <div className="w-full max-w-2xl">
-        <Card className="rounded-xl shadow-xl bg-white">
-          <CardHeader className="px-6 pt-6 pb-2 text-center">
-            <CardTitle className="text-2xl font-bold mb-1 text-gray-900">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-green-50 to-yellow-50 px-4 py-8">
+      <div className="w-full max-w-3xl">
+        {/* Logo/Brand Section */}
+        <div className="text-center mb-8">
+          <div className="mx-auto w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mb-4">
+            <Building2 className="h-8 w-8 text-white" />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Join Discount Business</h1>
+          <p className="text-gray-600">Create your business account and start offering deals</p>
+        </div>
+
+        <Card className="rounded-2xl shadow-xl bg-ivory border-0">
+          <CardHeader className="px-8 pt-8 pb-4 text-center">
+            <CardTitle className="text-2xl font-bold mb-2 text-gray-900">
               Create Business Account
             </CardTitle>
-            <CardDescription className="text-sm text-gray-600">
+            <CardDescription className="text-gray-600 mb-4">
               Already have an account?{' '}
               <Link 
                 href="/auth/login" 
-                className="text-[#FF7139] font-semibold italic hover:underline"
+                className="text-green-600 font-semibold hover:text-green-700 hover:underline"
               >
                 Sign in
               </Link>
             </CardDescription>
+            
+            {/* Progress Bar */}
+            <div className="w-full max-w-md mx-auto">
+              <Progress value={getProgress()} className="h-2 bg-gray-200" />
+              <div className="flex justify-between text-xs text-gray-500 mt-2">
+                <span className={activeTab === 'account' ? 'text-green-600 font-medium' : ''}>Account</span>
+                <span className={activeTab === 'business' ? 'text-green-600 font-medium' : ''}>Business</span>
+                <span className={activeTab === 'details' ? 'text-green-600 font-medium' : ''}>Details</span>
+              </div>
+            </div>
           </CardHeader>
 
-          <CardContent className="px-6 py-4">
+          <CardContent className="px-8 pb-8">
             {error && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertDescription>{error}</AlertDescription>
+              <Alert variant="destructive" className="mb-6 bg-red-50 border-red-200">
+                <AlertDescription className="text-red-800">{error}</AlertDescription>
               </Alert>
             )}
 
@@ -205,81 +235,106 @@ export default function BusinessSignup() {
                 onValueChange={setActiveTab}
                 className="w-full"
               >
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="account">Account</TabsTrigger>
-                  <TabsTrigger value="business">Business</TabsTrigger>
-                  <TabsTrigger value="details">Details</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-3 bg-gray-100 p-1 rounded-lg">
+                  <TabsTrigger value="account" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">
+                    <User className="h-4 w-4 mr-2" />
+                    Account
+                  </TabsTrigger>
+                  <TabsTrigger value="business" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">
+                    <Building2 className="h-4 w-4 mr-2" />
+                    Business
+                  </TabsTrigger>
+                  <TabsTrigger value="details" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">
+                    <MapPin className="h-4 w-4 mr-2" />
+                    Details
+                  </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="account" className="space-y-4 mt-4">
+                <TabsContent value="account" className="space-y-6 mt-6">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="first_name" className="text-gray-700 font-semibold">
+                      <Label htmlFor="first_name" className="text-gray-700 font-semibold text-sm">
                         First Name
                       </Label>
-                      <Input
-                        id="first_name"
-                        name="first_name"
-                        type="text"
-                        value={formData.first_name}
-                        onChange={handleChange}
-                        placeholder="Your first name"
-                      />
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <Input
+                          id="first_name"
+                          name="first_name"
+                          type="text"
+                          value={formData.first_name}
+                          onChange={handleChange}
+                          placeholder="Your first name"
+                          className="pl-10 h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="last_name" className="text-gray-700 font-semibold">
+                      <Label htmlFor="last_name" className="text-gray-700 font-semibold text-sm">
                         Last Name
                       </Label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <Input
+                          id="last_name"
+                          name="last_name"
+                          type="text"
+                          value={formData.last_name}
+                          onChange={handleChange}
+                          placeholder="Your last name"
+                          className="pl-10 h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-gray-700 font-semibold text-sm">
+                      Email address *
+                    </Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                       <Input
-                        id="last_name"
-                        name="last_name"
-                        type="text"
-                        value={formData.last_name}
+                        id="email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        required
+                        value={formData.email}
                         onChange={handleChange}
-                        placeholder="Your last name"
+                        placeholder="Enter your email"
+                        className="pl-10 h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="email" className="text-gray-700 font-semibold">
-                      Email address *
-                    </Label>
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      autoComplete="email"
-                      required
-                      value={formData.email}
-                      onChange={handleChange}
-                      placeholder="Enter your email"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="phone" className="text-gray-700 font-semibold">
+                    <Label htmlFor="phone" className="text-gray-700 font-semibold text-sm">
                       Phone Number
                     </Label>
-                    <Input
-                      id="phone"
-                      name="phone"
-                      type="tel"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      placeholder="Your phone number"
-                    />
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                      <Input
+                        id="phone"
+                        name="phone"
+                        type="tel"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        placeholder="Your phone number"
+                        className="pl-10 h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="password" className="text-gray-700 font-semibold">
+                      <Label htmlFor="password" className="text-gray-700 font-semibold text-sm">
                         Password *
                       </Label>
                       <div className="relative">
                         <Lock 
-                          className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" 
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" 
                           size={18} 
                         />
                         <Input
@@ -291,12 +346,12 @@ export default function BusinessSignup() {
                           value={formData.password}
                           onChange={handleChange}
                           placeholder="Create a password"
-                          className="pl-8 pr-10"
+                          className="pl-10 pr-12 h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
                         />
                         <button
                           type="button"
                           onClick={() => togglePasswordVisibility('password')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                           tabIndex={-1}
                         >
                           {showPassword.password ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -305,12 +360,12 @@ export default function BusinessSignup() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="confirmPassword" className="text-gray-700 font-semibold">
+                      <Label htmlFor="confirmPassword" className="text-gray-700 font-semibold text-sm">
                         Confirm Password *
                       </Label>
                       <div className="relative">
                         <Lock 
-                          className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" 
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" 
                           size={18} 
                         />
                         <Input
@@ -322,12 +377,12 @@ export default function BusinessSignup() {
                           value={formData.confirmPassword}
                           onChange={handleChange}
                           placeholder="Confirm your password"
-                          className="pl-8 pr-10"
+                          className="pl-10 pr-12 h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
                         />
                         <button
                           type="button"
                           onClick={() => togglePasswordVisibility('confirmPassword')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                           tabIndex={-1}
                         >
                           {showPassword.confirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -336,53 +391,59 @@ export default function BusinessSignup() {
                     </div>
                   </div>
 
-                  <div className="flex justify-end mt-4">
+                  <div className="flex justify-end mt-8">
                     <Button 
                       type="button" 
-                      className="bg-[#FF7139] hover:bg-[#e6632e] text-white"
+                      className="bg-green-600 hover:bg-green-700 text-white px-8 h-12 rounded-lg"
                       onClick={() => setActiveTab('business')}
                     >
-                      Next
+                      Next Step
+                      <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                   </div>
                 </TabsContent>
 
-                <TabsContent value="business" className="space-y-4 mt-4">
+                <TabsContent value="business" className="space-y-6 mt-6">
                   <div className="space-y-2">
-                    <Label htmlFor="business_name" className="text-gray-700 font-semibold">
+                    <Label htmlFor="business_name" className="text-gray-700 font-semibold text-sm">
                       Business Name *
                     </Label>
-                    <Input
-                      id="business_name"
-                      name="business_name"
-                      type="text"
-                      required
-                      value={formData.business_name}
-                      onChange={handleChange}
-                      placeholder="Enter your business name"
-                    />
+                    <div className="relative">
+                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                      <Input
+                        id="business_name"
+                        name="business_name"
+                        type="text"
+                        required
+                        value={formData.business_name}
+                        onChange={handleChange}
+                        placeholder="Enter your business name"
+                        className="pl-10 h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="business_description" className="text-gray-700 font-semibold">
+                    <Label htmlFor="business_description" className="text-gray-700 font-semibold text-sm">
                       Business Description
                     </Label>
                     <Textarea
                       id="business_description"
                       name="business_description"
-                      rows={3}
+                      rows={4}
                       value={formData.business_description}
                       onChange={handleChange}
                       placeholder="Describe your business..."
+                      className="bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg resize-none"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="category_id" className="text-gray-700 font-semibold">
+                    <Label htmlFor="category_id" className="text-gray-700 font-semibold text-sm">
                       Business Category
                     </Label>
                     <Select value={formData.category_id} onValueChange={handleCategoryChange}>
-                      <SelectTrigger>
+                      <SelectTrigger className="h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg">
                         <SelectValue placeholder="Select a category" />
                       </SelectTrigger>
                       <SelectContent>
@@ -397,95 +458,126 @@ export default function BusinessSignup() {
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="business_phone" className="text-gray-700 font-semibold">
+                      <Label htmlFor="business_phone" className="text-gray-700 font-semibold text-sm">
                         Business Phone
                       </Label>
-                      <Input
-                        id="business_phone"
-                        name="business_phone"
-                        type="tel"
-                        value={formData.business_phone}
-                        onChange={handleChange}
-                        placeholder="Business phone number"
-                      />
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <Input
+                          id="business_phone"
+                          name="business_phone"
+                          type="tel"
+                          value={formData.business_phone}
+                          onChange={handleChange}
+                          placeholder="Business phone number"
+                          className="pl-10 h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="business_website" className="text-gray-700 font-semibold">
+                      <Label htmlFor="business_website" className="text-gray-700 font-semibold text-sm">
                         Website
                       </Label>
-                      <Input
-                        id="business_website"
-                        name="business_website"
-                        type="url"
-                        placeholder="https://example.com"
-                        value={formData.business_website}
-                        onChange={handleChange}
-                      />
+                      <div className="relative">
+                        <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <Input
+                          id="business_website"
+                          name="business_website"
+                          type="url"
+                          placeholder="https://example.com"
+                          value={formData.business_website}
+                          onChange={handleChange}
+                          className="pl-10 h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex justify-between mt-4">
+                  <div className="flex justify-between mt-8">
                     <Button 
                       type="button" 
                       variant="outline"
+                      className="px-8 h-12 rounded-lg border-gray-200 hover:bg-gray-50"
                       onClick={() => setActiveTab('account')}
                     >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
                       Previous
                     </Button>
                     <Button 
                       type="button" 
-                      className="bg-[#FF7139] hover:bg-[#e6632e] text-white"
+                      className="bg-green-600 hover:bg-green-700 text-white px-8 h-12 rounded-lg"
                       onClick={() => setActiveTab('details')}
                     >
-                      Next
+                      Next Step
+                      <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                   </div>
                 </TabsContent>
 
-                <TabsContent value="details" className="space-y-4 mt-4">
+                <TabsContent value="details" className="space-y-6 mt-6">
                   <div className="space-y-2">
-                    <Label htmlFor="business_address" className="text-gray-700 font-semibold">
+                    <Label htmlFor="business_address" className="text-gray-700 font-semibold text-sm">
                       Business Address
                     </Label>
-                    <Textarea
-                      id="business_address"
-                      name="business_address"
-                      rows={3}
-                      value={formData.business_address}
-                      onChange={handleChange}
-                      placeholder="Enter your business address"
-                    />
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-3 text-gray-400" size={18} />
+                      <Textarea
+                        id="business_address"
+                        name="business_address"
+                        rows={3}
+                        value={formData.business_address}
+                        onChange={handleChange}
+                        placeholder="Enter your business address"
+                        className="pl-10 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg resize-none"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="avatar_url" className="text-gray-700 font-semibold">
+                    <Label htmlFor="avatar_url" className="text-gray-700 font-semibold text-sm">
                       Business Logo URL
                     </Label>
-                    <Input
-                      id="avatar_url"
-                      name="avatar_url"
-                      type="url"
-                      value={formData.avatar_url}
-                      onChange={handleChange}
-                      placeholder="https://example.com/logo.jpg"
-                    />
+                    <div className="relative">
+                      <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                      <Input
+                        id="avatar_url"
+                        name="avatar_url"
+                        type="url"
+                        value={formData.avatar_url}
+                        onChange={handleChange}
+                        placeholder="https://example.com/logo.jpg"
+                        className="pl-10 h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex justify-between mt-4">
+                  <div className="flex justify-between mt-8">
                     <Button 
                       type="button" 
                       variant="outline"
+                      className="px-8 h-12 rounded-lg border-gray-200 hover:bg-gray-50"
                       onClick={() => setActiveTab('business')}
                     >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
                       Previous
                     </Button>
                     <Button 
                       type="submit"
                       disabled={isLoading}
-                      className="bg-[#FF7139] hover:bg-[#e6632e] text-white"
+                      className="bg-green-600 hover:bg-green-700 text-white px-8 h-12 rounded-lg shadow-lg hover:shadow-xl transition-all"
                     >
-                      {isLoading ? 'Creating Account...' : 'Create Account'}
+                      {isLoading ? (
+                        <div className="flex items-center space-x-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                          <span>Creating Account...</span>
+                        </div>
+                      ) : (
+                        <>
+                          Create Account
+                          <Building2 className="ml-2 h-4 w-4" />
+                        </>
+                      )}
                     </Button>
                   </div>
                 </TabsContent>

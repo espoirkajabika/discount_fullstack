@@ -61,28 +61,49 @@ class ProductsService {
   // Create new product
   async createProduct(productData) {
     try {
+      console.log('Creating product with data:', productData);
+      
       const response = await makeAuthenticatedRequest('/business/products', {
         method: 'POST',
         body: JSON.stringify(productData),
       });
       
       if (!response || !response.ok) {
-        const data = await response?.json();
-        if (data.detail) {
-          if (Array.isArray(data.detail)) {
-            const errorMessages = data.detail.map(err => {
-              const field = err.loc ? err.loc[err.loc.length - 1] : 'field';
-              return `${field}: ${err.msg}`;
-            }).join(', ');
-            return { error: `Validation errors - ${errorMessages}` };
-          } else {
-            return { error: data.detail };
+        let data = null;
+        let errorMessage = `Request failed with status ${response?.status || 'unknown'}`;
+        
+        try {
+          data = await response?.json();
+          console.error('Product creation failed:', data);
+          
+          if (data && data.detail) {
+            if (Array.isArray(data.detail)) {
+              const errorMessages = data.detail.map(err => {
+                const field = err.loc ? err.loc[err.loc.length - 1] : 'field';
+                return `${field}: ${err.msg}`;
+              }).join(', ');
+              errorMessage = `Validation errors - ${errorMessages}`;
+            } else {
+              errorMessage = data.detail;
+            }
+          } else if (data && data.message) {
+            errorMessage = data.message;
+          }
+        } catch (jsonError) {
+          console.error('Failed to parse error response as JSON:', jsonError);
+          console.error('Raw response:', response);
+          
+          // For server errors, provide a more user-friendly message
+          if (response?.status >= 500) {
+            errorMessage = 'Server error occurred. Please try again or contact support.';
           }
         }
-        return { error: data?.message || 'Failed to create product' };
+        
+        return { error: errorMessage };
       }
       
       const data = await response.json();
+      console.log('Product created successfully:', data);
       return { success: true, product: data.product || data };
     } catch (error) {
       console.error('Create product error:', error);
@@ -94,7 +115,7 @@ class ProductsService {
   async updateProduct(productId, productData) {
     try {
       const response = await makeAuthenticatedRequest(`/business/products/${productId}`, {
-        method: 'PUT',
+        method: 'PATCH',
         body: JSON.stringify(productData),
       });
       
@@ -141,26 +162,43 @@ class ProductsService {
     }
   }
 
-  // Upload product image
+  // Upload product image with proper token handling
   async uploadImage(imageFile) {
     try {
+      console.log('Uploading image file:', imageFile.name, imageFile.size, 'bytes');
+      
       const formData = new FormData();
       formData.append('image', imageFile);
 
-      // Note: This endpoint might need to be different in your FastAPI
+      // Get the token for authorization
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        return { error: 'Authentication required' };
+      }
+
       const response = await fetch(`${API_BASE_URL}/business/products/upload-image`, {
         method: 'POST',
-        body: formData,
-        credentials: 'include'
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
       });
 
       if (!response.ok) {
         const data = await response.json();
+        console.error('Image upload failed:', data);
         return { error: data.detail || 'Failed to upload image' };
       }
 
       const data = await response.json();
-      return { success: true, path: data.path, url: data.url };
+      console.log('Image uploaded successfully:', data);
+      
+      return { 
+        success: true, 
+        path: data.path, 
+        url: data.url,
+        compression_info: data.compression_info
+      };
     } catch (error) {
       console.error('Upload image error:', error);
       return { error: 'Network error. Please try again.' };

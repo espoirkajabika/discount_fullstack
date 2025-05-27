@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { AlertCircle, ArrowLeft, Calendar, Percent } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from '@/components/ui/separator';
-import { 
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -27,12 +27,15 @@ import {
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Switch } from "@/components/ui/switch";
 import { StorageImage } from '@/components/ui/storage-image';
+import { createOffer } from '@/lib/offers';
+import { getProducts } from '@/lib/products'; 
+
 
 export default function NewOfferPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preSelectedProductId = searchParams.get('productId');
-  
+
   const [formData, setFormData] = useState({
     product_id: preSelectedProductId || '',
     discount_percentage: '',
@@ -43,7 +46,7 @@ export default function NewOfferPage() {
     max_claims: '',
     has_max_claims: false, // UI helper, not sent to API
   });
-  
+
   const [products, setProducts] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -63,28 +66,23 @@ export default function NewOfferPage() {
   }, []);
 
   // Fetch products for dropdown
+
   useEffect(() => {
     const fetchProducts = async () => {
       setIsProductsLoading(true);
       try {
-        const response = await fetch('/api/business/products?limit=100', {
-          credentials: 'include',
-        });
-        
-        // Store the JSON data first
-        const data = await response.json();
-        
-        if (!response.ok) {
-          // Use the data that's already parsed
-          throw new Error(data.error || 'Failed to fetch products');
+        const result = await getProducts({ limit: 100 });
+
+        if (result.error) {
+          throw new Error(result.error);
         }
-        
-        // Use the data that's already been parsed
-        setProducts(data.products);
-        
+
+        const products = result.products || [];
+        setProducts(products);
+
         // If a product ID was provided in the URL, select that product
         if (preSelectedProductId) {
-          const selectedProduct = data.products.find(p => p.id === preSelectedProductId);
+          const selectedProduct = products.find(p => p.id === preSelectedProductId);
           if (selectedProduct) {
             setSelectedProduct(selectedProduct);
           }
@@ -96,7 +94,7 @@ export default function NewOfferPage() {
         setIsProductsLoading(false);
       }
     };
-    
+
     fetchProducts();
   }, [preSelectedProductId]);
 
@@ -112,7 +110,7 @@ export default function NewOfferPage() {
   // Handle discount percentage input (numbers only, max 100)
   const handleDiscountChange = (e) => {
     const value = e.target.value.replace(/[^0-9]/g, '');
-    
+
     if (value === '' || (parseInt(value) >= 1 && parseInt(value) <= 100)) {
       setFormData(prev => ({
         ...prev,
@@ -136,7 +134,7 @@ export default function NewOfferPage() {
       ...prev,
       product_id: productId
     }));
-    
+
     const product = products.find(p => p.id === productId);
     setSelectedProduct(product);
   };
@@ -204,50 +202,43 @@ export default function NewOfferPage() {
 
   // Handle form submission
   const handleSubmit = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
+  
+  if (!validateForm()) {
+    return;
+  }
+  
+  setIsLoading(true);
+  
+  try {
+    const offerData = {
+      product_id: formData.product_id,
+      discount_percentage: parseInt(formData.discount_percentage),
+      discount_code: formData.discount_code || null,
+      start_date: formData.start_date.toISOString(),
+      expiry_date: formData.expiry_date.toISOString(),
+      is_active: formData.is_active,
+      max_claims: formData.has_max_claims ? parseInt(formData.max_claims) : null,
+      title: `${formData.discount_percentage}% Off ${selectedProduct?.name || 'Product'}`,
+      description: `Get ${formData.discount_percentage}% off ${selectedProduct?.name || 'this product'}!`,
+      terms_conditions: "Standard terms and conditions apply"
+    };
     
-    if (!validateForm()) {
-      return;
+    const result = await createOffer(offerData);
+    
+    if (result.error) {
+      throw new Error(result.error);
     }
     
-    setIsLoading(true);
-    
-    try {
-      // Prepare data for API
-      const payload = {
-        product_id: formData.product_id,
-        discount_percentage: parseInt(formData.discount_percentage),
-        discount_code: formData.discount_code,
-        start_date: formData.start_date.toISOString(),
-        expiry_date: formData.expiry_date.toISOString(),
-        is_active: formData.is_active,
-        max_claims: formData.has_max_claims ? parseInt(formData.max_claims) : null
-      };
-      
-      const response = await fetch('/api/business/offers', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-        credentials: 'include',
-      });
-
-      // Parse the response
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create offer');
-      }
-      
-      // Redirect to the offer page
-      router.push(`/business/offers/${data.offer.id}`);
-    } catch (err) {
-      console.error('Error creating offer:', err);
-      setError(err.message);
-      setIsLoading(false);
-    }
-  };
+    // Redirect to the offer page
+    router.push(`/offers/${result.offer.id}`);
+  } catch (err) {
+    console.error('Error creating offer:', err);
+    setError(err.message);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Format price
   const formatPrice = (price) => {
@@ -262,7 +253,7 @@ export default function NewOfferPage() {
     if (!selectedProduct || !formData.discount_percentage) {
       return null;
     }
-    
+
     const originalPrice = selectedProduct.price;
     const discountAmount = originalPrice * (parseInt(formData.discount_percentage) / 100);
     return originalPrice - discountAmount;
@@ -271,10 +262,10 @@ export default function NewOfferPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex items-center mb-6">
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           className="mr-2 p-0 h-auto"
-          onClick={() => router.push('/business/offers')}
+          onClick={() => router.push('/offers')}
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
@@ -315,7 +306,7 @@ export default function NewOfferPage() {
                           </div>
                         ) : products.length === 0 ? (
                           <div className="p-2 text-center">
-                            No products found. <Link href="/business/products/new" className="text-blue-600">Add a product</Link>
+                            No products found. <Link href="/products/new" className="text-blue-600">Add a product</Link>
                           </div>
                         ) : (
                           products.map(product => (
@@ -421,7 +412,7 @@ export default function NewOfferPage() {
                               mode="single"
                               selected={formData.expiry_date}
                               onSelect={(date) => handleDateSelect(date, 'expiry_date')}
-                              disabled={(date) => 
+                              disabled={(date) =>
                                 date < new Date(new Date().setHours(0, 0, 0, 0)) ||
                                 (formData.start_date && date < formData.start_date)
                               }
@@ -479,7 +470,7 @@ export default function NewOfferPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => router.push('/business/offers')}
+                      onClick={() => router.push('/offers')}
                       disabled={isLoading}
                     >
                       Cancel
@@ -519,18 +510,18 @@ export default function NewOfferPage() {
                       emptyIcon={<p className="flex items-center justify-center h-full text-gray-400">No image</p>}
                     />
                   </div>
-                  
+
                   <h3 className="font-medium text-lg">{selectedProduct.name}</h3>
-                  
+
                   <div className="mt-3 grid grid-cols-2 gap-1">
                     <div className="text-gray-500">Original price:</div>
                     <div className="text-right">{formatPrice(selectedProduct.price)}</div>
-                    
+
                     {formData.discount_percentage && (
                       <>
                         <div className="text-gray-500">Discount:</div>
                         <div className="text-right text-red-600">-{formData.discount_percentage}%</div>
-                        
+
                         <div className="text-gray-500 font-medium">Final price:</div>
                         <div className="text-right font-bold text-green-600">
                           {formatPrice(calculateDiscountedPrice())}
@@ -538,9 +529,9 @@ export default function NewOfferPage() {
                       </>
                     )}
                   </div>
-                  
+
                   <Separator className="my-4" />
-                  
+
                   <div className="space-y-2 text-sm">
                     {formData.discount_code && (
                       <div>
@@ -550,28 +541,28 @@ export default function NewOfferPage() {
                         </span>
                       </div>
                     )}
-                    
+
                     {formData.start_date && (
                       <div>
                         <span className="text-gray-500">Valid from: </span>
                         {format(formData.start_date, "PPP")}
                       </div>
                     )}
-                    
+
                     {formData.expiry_date && (
                       <div>
                         <span className="text-gray-500">Expires: </span>
                         {format(formData.expiry_date, "PPP")}
                       </div>
                     )}
-                    
+
                     {formData.has_max_claims && formData.max_claims && (
                       <div>
                         <span className="text-gray-500">Limited to: </span>
                         {formData.max_claims} claims
                       </div>
                     )}
-                    
+
                     <div>
                       <span className="text-gray-500">Status: </span>
                       <span className={formData.is_active ? "text-green-600" : "text-gray-600"}>

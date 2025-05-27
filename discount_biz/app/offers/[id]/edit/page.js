@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { AlertCircle, ArrowLeft, Calendar, Percent } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from '@/components/ui/separator';
-import { 
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -33,9 +33,9 @@ import { Badge } from '@/components/ui/badge';
 export default function EditOfferPage({ params }) {
   // Use the React.use method to unwrap the params
   const id = use(params).id;
-  
+
   const router = useRouter();
-  
+
   const [originalOffer, setOriginalOffer] = useState(null);
   const [formData, setFormData] = useState({
     discount_percentage: '',
@@ -46,7 +46,7 @@ export default function EditOfferPage({ params }) {
     max_claims: '',
     has_max_claims: false,
   });
-  
+
   const [product, setProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,17 +70,17 @@ export default function EditOfferPage({ params }) {
         const data = await response.json();
         const offer = data.offer;
         setOriginalOffer(offer);
-        
-        // Set the product
-        setProduct(offer.products);
-        
+
+        // Set the product - handle both 'product' and 'products' keys
+        setProduct(offer.product || offer.products);
+
         // Parse dates
         const startDate = new Date(offer.start_date);
         const expiryDate = new Date(offer.expiry_date);
-        
-        // Set form data
+
+        // Set form data - use discount_value from backend
         setFormData({
-          discount_percentage: offer.discount_percentage.toString(),
+          discount_percentage: (offer.discount_value || offer.discount_percentage || 0).toString(),
           discount_code: offer.discount_code || '',
           start_date: startDate,
           expiry_date: expiryDate,
@@ -99,6 +99,10 @@ export default function EditOfferPage({ params }) {
     fetchOffer();
   }, [id]);
 
+
+
+
+
   // Handle text input changes
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -111,7 +115,7 @@ export default function EditOfferPage({ params }) {
   // Handle discount percentage input (numbers only, max 100)
   const handleDiscountChange = (e) => {
     const value = e.target.value.replace(/[^0-9]/g, '');
-    
+
     if (value === '' || (parseInt(value) >= 1 && parseInt(value) <= 100)) {
       setFormData(prev => ({
         ...prev,
@@ -157,7 +161,7 @@ export default function EditOfferPage({ params }) {
   // Get offer status
   const getOfferStatus = () => {
     if (!originalOffer) return { label: "Unknown", color: "gray" };
-    
+
     const now = new Date();
     const startDate = new Date(originalOffer.start_date);
     const expiryDate = new Date(originalOffer.expiry_date);
@@ -202,8 +206,8 @@ export default function EditOfferPage({ params }) {
     }
 
     // Ensure max claims is not less than current claims
-    if (formData.has_max_claims && originalOffer && 
-        parseInt(formData.max_claims) < originalOffer.current_claims) {
+    if (formData.has_max_claims && originalOffer &&
+      parseInt(formData.max_claims) < originalOffer.current_claims) {
       setError(`Maximum claims cannot be less than current claims (${originalOffer.current_claims})`);
       return false;
     }
@@ -214,24 +218,45 @@ export default function EditOfferPage({ params }) {
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
-    
+
     setIsSubmitting(true);
-    
+
     try {
-      // Prepare data for API
-      const payload = {
-        discount_percentage: parseInt(formData.discount_percentage),
-        discount_code: formData.discount_code || null,
-        start_date: formData.start_date.toISOString(),
-        expiry_date: formData.expiry_date.toISOString(),
-        is_active: formData.is_active,
-        max_claims: formData.has_max_claims ? parseInt(formData.max_claims) : null
-      };
-      
+      // Prepare data for API - only send changed fields
+      const payload = {};
+
+      if (formData.discount_percentage !== originalOffer?.discount_value?.toString()) {
+        payload.discount_percentage = parseInt(formData.discount_percentage);
+      }
+
+      if (formData.discount_code !== (originalOffer?.discount_code || '')) {
+        payload.discount_code = formData.discount_code || null;
+      }
+
+      if (formData.start_date?.toISOString() !== originalOffer?.start_date) {
+        payload.start_date = formData.start_date.toISOString();
+      }
+
+      if (formData.expiry_date?.toISOString() !== originalOffer?.expiry_date) {
+        payload.expiry_date = formData.expiry_date.toISOString();
+      }
+
+      if (formData.is_active !== originalOffer?.is_active) {
+        payload.is_active = formData.is_active;
+      }
+
+      if (formData.has_max_claims !== (originalOffer?.max_claims !== null)) {
+        payload.max_claims = formData.has_max_claims ? parseInt(formData.max_claims) : null;
+      } else if (formData.has_max_claims && formData.max_claims !== originalOffer?.max_claims?.toString()) {
+        payload.max_claims = parseInt(formData.max_claims);
+      }
+
+      console.log('Updating offer with payload:', payload);
+
       const response = await fetch(`/api/business/offers/${id}`, {
         method: 'PATCH',
         headers: {
@@ -240,14 +265,15 @@ export default function EditOfferPage({ params }) {
         body: JSON.stringify(payload),
         credentials: 'include',
       });
-      
+
+      const data = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update offer');
+        throw new Error(data.error || data.detail || 'Failed to update offer');
       }
-      
+
       // Redirect to the offer page
-      router.push(`/business/offers/${id}`);
+      router.push(`/offers/${id}`);
     } catch (err) {
       console.error('Error updating offer:', err);
       setError(err.message);
@@ -269,7 +295,7 @@ export default function EditOfferPage({ params }) {
     if (!product || !formData.discount_percentage) {
       return null;
     }
-    
+
     const originalPrice = product.price;
     const discountAmount = originalPrice * (parseInt(formData.discount_percentage) / 100);
     return originalPrice - discountAmount;
@@ -288,8 +314,8 @@ export default function EditOfferPage({ params }) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center mb-6">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             className="mr-2 p-0 h-auto"
             onClick={() => router.back()}
           >
@@ -309,8 +335,8 @@ export default function EditOfferPage({ params }) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center mb-6">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             className="mr-2 p-0 h-auto"
             onClick={() => router.back()}
           >
@@ -345,8 +371,8 @@ export default function EditOfferPage({ params }) {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex items-center mb-6">
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           className="mr-2 p-0 h-auto"
           onClick={() => router.push(`/business/offers/${id}`)}
         >
@@ -399,7 +425,7 @@ export default function EditOfferPage({ params }) {
                         <p className="font-medium">{product?.name}</p>
                         <p className="text-sm text-gray-500">{formatPrice(product?.price)}</p>
                       </div>
-                      <Link 
+                      <Link
                         href={`/business/products/${product?.id}`}
                         className="text-sm text-blue-600 hover:underline"
                       >
@@ -503,7 +529,7 @@ export default function EditOfferPage({ params }) {
                               mode="single"
                               selected={formData.expiry_date}
                               onSelect={(date) => handleDateSelect(date, 'expiry_date')}
-                              disabled={(date) => 
+                              disabled={(date) =>
                                 (formData.start_date && date < formData.start_date)
                               }
                               initialFocus
@@ -551,10 +577,10 @@ export default function EditOfferPage({ params }) {
                         placeholder="100"
                         className="mt-1 max-w-[200px]"
                       />
-                      
+
                       {originalOffer && originalOffer.current_claims > 0 && (
                         <p className="text-xs text-amber-600 mt-1">
-                          Currently {originalOffer.current_claims} claims used. 
+                          Currently {originalOffer.current_claims} claims used.
                           New maximum must be greater than or equal to this amount.
                         </p>
                       )}
@@ -607,18 +633,18 @@ export default function EditOfferPage({ params }) {
                     emptyIcon={<p className="flex items-center justify-center h-full text-gray-400">No image</p>}
                   />
                 </div>
-                
+
                 <h3 className="font-medium text-lg">{product?.name}</h3>
-                
+
                 <div className="mt-3 grid grid-cols-2 gap-1">
                   <div className="text-gray-500">Original price:</div>
                   <div className="text-right">{formatPrice(product?.price)}</div>
-                  
+
                   {formData.discount_percentage && (
                     <>
                       <div className="text-gray-500">Discount:</div>
                       <div className="text-right text-red-600">-{formData.discount_percentage}%</div>
-                      
+
                       <div className="text-gray-500 font-medium">Final price:</div>
                       <div className="text-right font-bold text-green-600">
                         {formatPrice(calculateDiscountedPrice())}
@@ -626,9 +652,9 @@ export default function EditOfferPage({ params }) {
                     </>
                   )}
                 </div>
-                
+
                 <Separator className="my-4" />
-                
+
                 <div className="space-y-2 text-sm">
                   {formData.discount_code && (
                     <div>
@@ -638,28 +664,28 @@ export default function EditOfferPage({ params }) {
                       </span>
                     </div>
                   )}
-                  
+
                   {formData.start_date && (
                     <div>
                       <span className="text-gray-500">Valid from: </span>
                       {format(formData.start_date, "PPP")}
                     </div>
                   )}
-                  
+
                   {formData.expiry_date && (
                     <div>
                       <span className="text-gray-500">Expires: </span>
                       {format(formData.expiry_date, "PPP")}
                     </div>
                   )}
-                  
+
                   {formData.has_max_claims && formData.max_claims && (
                     <div>
                       <span className="text-gray-500">Limited to: </span>
                       {formData.max_claims} claims
                     </div>
                   )}
-                  
+
                   <div>
                     <span className="text-gray-500">Status: </span>
                     <span className={formData.is_active ? "text-green-600" : "text-gray-600"}>

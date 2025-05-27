@@ -1,179 +1,156 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
-import { 
-  Building, 
-  ShoppingBag, 
-  Tag, 
-  User, 
-  LogOut, 
-  Home,
-  BarChart3,
-  Settings
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { ArrowLeft, Home, Building2 } from 'lucide-react';
 
-export default function Navigation() {
-  const { user, logout } = useAuth();
+export function PageHeader({ 
+  title, 
+  subtitle, 
+  backButton = true, 
+  backUrl = null,
+  backLabel = "Back",
+  children 
+}) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const handleLogout = async () => {
-    await logout();
-    router.push('/auth/login');
+  const handleBack = () => {
+    if (backUrl) {
+      router.push(backUrl);
+    } else {
+      router.back();
+    }
   };
 
-  const navItems = [
-    {
-      label: 'Dashboard',
-      href: '/dashboard',
-      icon: Home,
-      active: pathname === '/dashboard'
-    },
-    {
-      label: 'Products',
-      href: '/products',
-      icon: ShoppingBag,
-      active: pathname.startsWith('/products')
-    },
-    {
-      label: 'Offers',
-      href: '/offers',
-      icon: Tag,
-      active: pathname.startsWith('/offers')
-    },
-    {
-      label: 'Analytics',
-      href: '/analytics',
-      icon: BarChart3,
-      active: pathname.startsWith('/analytics'),
-      disabled: true
-    },
-    {
-      label: 'Settings',
-      href: '/settings',
-      icon: Settings,
-      active: pathname.startsWith('/settings'),
-      disabled: true
-    }
-  ];
+  const getBreadcrumb = () => {
+    const pathSegments = pathname.split('/').filter(Boolean);
+    const breadcrumbs = [];
+
+    // Add Home
+    breadcrumbs.push({ label: 'Dashboard', href: '/dashboard', icon: Home });
+
+    // Map common paths
+    const pathMap = {
+      'products': 'Products',
+      'offers': 'Offers',
+      'new': 'New',
+      'edit': 'Edit',
+      'analytics': 'Analytics'
+    };
+
+    let currentPath = '';
+    pathSegments.forEach((segment, index) => {
+      currentPath += `/${segment}`;
+      
+      // Skip UUID-like segments (product/offer IDs)
+      if (segment.length === 36 && segment.includes('-')) {
+        return;
+      }
+
+      const label = pathMap[segment] || segment.charAt(0).toUpperCase() + segment.slice(1);
+      breadcrumbs.push({ label, href: currentPath });
+    });
+
+    return breadcrumbs;
+  };
+
+  const breadcrumbs = getBreadcrumb();
 
   return (
-    <nav className="bg-white shadow-sm border-b">
+    <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          {/* Logo */}
-          <Link href="/dashboard" className="flex items-center">
-            <Building className="h-8 w-8 text-[#FF7139] mr-3" />
-            <span className="text-xl font-semibold text-gray-900">
-              Business Portal
-            </span>
-          </Link>
-
-          {/* Main Navigation */}
-          <div className="hidden md:flex items-center space-x-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              
-              if (item.disabled) {
-                return (
-                  <Button
-                    key={item.href}
-                    variant="ghost"
-                    className="flex items-center space-x-2 text-gray-400 cursor-not-allowed"
-                    disabled
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                  </Button>
-                );
-              }
-
-              return (
-                <Link key={item.href} href={item.href}>
-                  <Button
-                    variant="ghost"
-                    className={cn(
-                      "flex items-center space-x-2",
-                      item.active 
-                        ? "bg-[#FF7139]/10 text-[#FF7139]" 
-                        : "text-gray-600 hover:text-gray-900"
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                  </Button>
-                </Link>
-              );
-            })}
-          </div>
-
-          {/* User Menu */}
+        {/* Top navigation bar with logo and breadcrumbs */}
+        <div className="flex items-center justify-between h-16 border-b border-gray-100">
           <div className="flex items-center space-x-4">
-            <div className="hidden sm:flex items-center space-x-2">
-              <User className="h-5 w-5 text-gray-400" />
-              <span className="text-sm text-gray-700">
-                {user?.first_name} {user?.last_name}
-              </span>
+            <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
+              <Building2 className="h-5 w-5 text-white" />
             </div>
             
-            <Button 
-              variant="outline" 
+            {/* Breadcrumbs */}
+            <nav className="flex items-center space-x-2 text-sm">
+              {breadcrumbs.map((crumb, index) => (
+                <div key={crumb.href} className="flex items-center space-x-2">
+                  {index > 0 && <span className="text-gray-400">/</span>}
+                  <button
+                    onClick={() => router.push(crumb.href)}
+                    className={`flex items-center space-x-1 hover:text-green-600 transition-colors ${
+                      index === breadcrumbs.length - 1 
+                        ? 'text-gray-900 font-medium' 
+                        : 'text-gray-500 hover:text-green-600'
+                    }`}
+                  >
+                    {crumb.icon && <crumb.icon className="h-4 w-4" />}
+                    <span>{crumb.label}</span>
+                  </button>
+                </div>
+              ))}
+            </nav>
+          </div>
+
+          {/* Right side - could add user menu, notifications, etc. */}
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="ghost"
               size="sm"
-              onClick={handleLogout}
-              className="flex items-center space-x-2"
+              onClick={() => router.push('/dashboard')}
+              className="text-gray-600 hover:text-green-600"
             >
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">Logout</span>
+              <Home className="h-4 w-4 mr-2" />
+              Dashboard
             </Button>
           </div>
         </div>
-      </div>
 
-      {/* Mobile Navigation */}
-      <div className="md:hidden border-t border-gray-200">
-        <div className="flex items-center justify-around py-2">
-          {navItems.slice(0, 4).map((item) => {
-            const Icon = item.icon;
-            
-            if (item.disabled) {
-              return (
-                <Button
-                  key={item.href}
-                  variant="ghost"
-                  size="sm"
-                  className="flex flex-col items-center space-y-1 text-gray-400 cursor-not-allowed p-2"
-                  disabled
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="text-xs">{item.label}</span>
-                </Button>
-              );
-            }
-
-            return (
-              <Link key={item.href} href={item.href}>
+        {/* Page header */}
+        <div className="py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center space-x-4">
+              {backButton && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={cn(
-                    "flex flex-col items-center space-y-1 p-2",
-                    item.active 
-                      ? "text-[#FF7139]" 
-                      : "text-gray-600"
-                  )}
+                  onClick={handleBack}
+                  className="flex-shrink-0 -ml-2 text-gray-600 hover:text-green-600"
                 >
-                  <Icon className="h-4 w-4" />
-                  <span className="text-xs">{item.label}</span>
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  {backLabel}
                 </Button>
-              </Link>
-            );
-          })}
+              )}
+              
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+                {subtitle && (
+                  <p className="text-gray-600 mt-1">{subtitle}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            {children && (
+              <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row gap-3">
+                {children}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </nav>
+    </div>
+  );
+}
+
+export function PageContainer({ children, className = "" }) {
+  return (
+    <div className={`min-h-screen bg-gradient-to-br from-green-50 to-yellow-50 ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+export function ContentContainer({ children, className = "" }) {
+  return (
+    <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 ${className}`}>
+      {children}
+    </div>
   );
 }

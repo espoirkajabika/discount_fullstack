@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // Icons
-import { Mail, Lock, EyeOff, Eye, CheckCircle } from 'lucide-react';
+import { Mail, Lock, EyeOff, Eye, CheckCircle, Building2 } from 'lucide-react';
 
 export default function BusinessLogin() {
   const router = useRouter();
@@ -67,27 +67,30 @@ export default function BusinessLogin() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#0E2F5A] px-4 py-8">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-green-50 to-yellow-50 px-4 py-8">
       <div className="w-full max-w-md">
-        <Card className="rounded-xl shadow-xl bg-white">
-          <CardHeader className="px-6 pt-6 pb-2 text-center">
-            <CardTitle className="text-2xl font-bold mb-1 text-gray-900">
-              Business Login
+        {/* Logo/Brand Section */}
+        <div className="text-center mb-8">
+          <div className="mx-auto w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mb-4">
+            <Building2 className="h-8 w-8 text-white" />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Discount Business</h1>
+          <p className="text-gray-600">Manage your business offers and promotions</p>
+        </div>
+
+        <Card className="rounded-2xl shadow-xl bg-ivory border-0">
+          <CardHeader className="px-8 pt-8 pb-4 text-center">
+            <CardTitle className="text-2xl font-bold mb-2 text-gray-900">
+              Welcome Back
             </CardTitle>
-            <CardDescription className="text-sm text-gray-600">
-              First time logging in?{' '}
-              <Link 
-                href="/auth/signup" 
-                className="text-[#FF7139] font-semibold italic hover:underline"
-              >
-                Sign up
-              </Link>
+            <CardDescription className="text-gray-600">
+              Sign in to your business account
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="px-6 py-4">
+          <CardContent className="px-8 pb-8">
             {successMessage && (
-              <Alert className="mb-4 border-green-200 bg-green-50">
+              <Alert className="mb-6 border-green-200 bg-green-50">
                 <CheckCircle className="h-4 w-4 text-green-600" />
                 <AlertDescription className="text-green-800">
                   {successMessage}
@@ -96,20 +99,20 @@ export default function BusinessLogin() {
             )}
 
             {error && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertDescription>{error}</AlertDescription>
+              <Alert variant="destructive" className="mb-6 bg-red-50 border-red-200">
+                <AlertDescription className="text-red-800">{error}</AlertDescription>
               </Alert>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
               {/* Email Field */}
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-gray-700 font-semibold">
+                <Label htmlFor="email" className="text-gray-700 font-semibold text-sm">
                   Email address
                 </Label>
                 <div className="relative">
                   <Mail 
-                    className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" 
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" 
                     size={18} 
                   />
                   <Input
@@ -118,8 +121,8 @@ export default function BusinessLogin() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Email address"
-                    className="pl-8"
+                    placeholder="Enter your email"
+                    className="pl-10 h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
                   />
                 </div>
               </div>
@@ -127,19 +130,19 @@ export default function BusinessLogin() {
               {/* Password Field */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-gray-700 font-semibold">
+                  <Label htmlFor="password" className="text-gray-700 font-semibold text-sm">
                     Password
                   </Label>
                   <Link 
                     href="/auth/reset-password" 
-                    className="text-sm text-[#FF7139] hover:underline italic"
+                    className="text-sm text-green-600 hover:text-green-700 hover:underline font-medium"
                   >
                     Forgot password?
                   </Link>
                 </div>
                 <div className="relative">
                   <Lock 
-                    className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" 
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" 
                     size={18} 
                   />
                   <Input
@@ -148,14 +151,13 @@ export default function BusinessLogin() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Password"
-                    className="pl-8 pr-10"
+                    placeholder="Enter your password"
+                    className="pl-10 pr-12 h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
                   />
-                  {/* Toggle show password */}
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                     tabIndex={-1}
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -166,12 +168,32 @@ export default function BusinessLogin() {
               {/* Login Button */}
               <Button
                 type="submit"
-                className="w-full h-12 bg-[#FF7139] hover:bg-[#e6632e] text-white text-md font-semibold mt-4"
+                className="w-full h-12 bg-green-600 hover:bg-green-700 text-white text-base font-semibold rounded-lg transition-colors shadow-lg hover:shadow-xl"
                 disabled={isLoading}
               >
-                {isLoading ? 'Logging in...' : 'Log in'}
+                {isLoading ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    <span>Signing in...</span>
+                  </div>
+                ) : (
+                  'Sign In'
+                )}
               </Button>
             </form>
+
+            {/* Sign up link */}
+            <div className="mt-8 text-center">
+              <p className="text-gray-600">
+                Don't have an account?{' '}
+                <Link 
+                  href="/auth/signup" 
+                  className="text-green-600 font-semibold hover:text-green-700 hover:underline"
+                >
+                  Create a business account
+                </Link>
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>

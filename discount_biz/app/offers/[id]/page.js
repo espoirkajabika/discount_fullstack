@@ -14,14 +14,14 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { 
-  AlertCircle, 
-  ArrowLeft, 
-  Calendar, 
-  Copy, 
-  Edit, 
-  Share2, 
-  Trash, 
+import {
+  AlertCircle,
+  ArrowLeft,
+  Calendar,
+  Copy,
+  Edit,
+  Share2,
+  Trash,
   TrendingUp,
   CheckCircle2,
   Circle,
@@ -42,7 +42,7 @@ import { Separator } from '@/components/ui/separator';
 import { format } from 'date-fns';
 import { StorageImage } from '@/components/ui/storage-image';
 import { Skeleton } from '@/components/ui/skeleton';
-import { 
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -52,7 +52,7 @@ import {
 export default function OfferDetailsPage({ params }) {
   // Use the React.use method to unwrap the params
   const id = use(params).id;
-  
+
   const router = useRouter();
   const [offer, setOffer] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -81,7 +81,18 @@ export default function OfferDetailsPage({ params }) {
         }
 
         const data = await response.json();
-        setOffer(data.offer);
+        const offerData = data.offer;
+
+        // Ensure we have the correct data structure
+        const processedOffer = {
+          ...offerData,
+          // Handle both discount_value and discount_percentage
+          discount_percentage: offerData.discount_value || offerData.discount_percentage || 0,
+          // Ensure we have product data in the right place
+          products: offerData.product || offerData.products
+        };
+
+        setOffer(processedOffer);
       } catch (err) {
         console.error('Error fetching offer:', err);
         setError(err.message);
@@ -92,16 +103,15 @@ export default function OfferDetailsPage({ params }) {
 
     fetchOffer();
   }, [id]);
-
   // Handle toggle offer active status
   const handleToggleActive = async () => {
     if (isToggling) return;
-    
+
     setIsToggling(true);
-    
+
     try {
       const newStatus = !offer.is_active;
-      
+
       const response = await fetch(`/api/business/offers/${id}/status`, {
         method: 'PATCH',
         headers: {
@@ -111,12 +121,12 @@ export default function OfferDetailsPage({ params }) {
         credentials: 'include',
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update offer status');
+        throw new Error(data.error || data.detail || 'Failed to update offer status');
       }
 
-      const data = await response.json();
       setOffer(data.offer);
     } catch (err) {
       console.error('Error toggling offer status:', err);
@@ -141,7 +151,7 @@ export default function OfferDetailsPage({ params }) {
       }
 
       // Redirect to offers list
-      router.push('/business/offers');
+      router.push('/offers');
     } catch (err) {
       console.error('Error deleting offer:', err);
       setError('Failed to delete offer: ' + err.message);
@@ -176,7 +186,7 @@ export default function OfferDetailsPage({ params }) {
   // Get offer status
   const getOfferStatus = () => {
     if (!offer) return { label: "Unknown", color: "gray" };
-    
+
     const now = new Date();
     const startDate = new Date(offer.start_date);
     const expiryDate = new Date(offer.expiry_date);
@@ -196,35 +206,37 @@ export default function OfferDetailsPage({ params }) {
   // Calculate remaining days
   const calculateRemainingDays = () => {
     if (!offer) return null;
-    
+
     const now = new Date();
     const expiryDate = new Date(offer.expiry_date);
-    
+
     // If already expired, return 0
     if (now > expiryDate) return 0;
-    
+
     // Calculate difference in days
     const diffTime = Math.abs(expiryDate - now);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     return diffDays;
   };
 
-  // Calculate discounted price
   const calculateDiscountedPrice = () => {
     if (!offer || !offer.products) return null;
-    
+
     const originalPrice = offer.products.price;
-    const discountAmount = originalPrice * (offer.discount_percentage / 100);
+    const discountPercentage = offer.discount_value || offer.discount_percentage || 0;
+    const discountAmount = originalPrice * (discountPercentage / 100);
     return originalPrice - discountAmount;
   };
 
-  // Calculate savings
+  // Update the calculateSavings function:
+
   const calculateSavings = () => {
     if (!offer || !offer.products) return null;
-    
+
     const originalPrice = offer.products.price;
-    return originalPrice * (offer.discount_percentage / 100);
+    const discountPercentage = offer.discount_value || offer.discount_percentage || 0;
+    return originalPrice * (discountPercentage / 100);
   };
 
   // Status colors
@@ -242,7 +254,7 @@ export default function OfferDetailsPage({ params }) {
           <Button
             variant="ghost"
             className="mr-2 p-0 h-auto"
-            onClick={() => router.push('/business/offers')}
+            onClick={() => router.push('/offers')}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -289,7 +301,7 @@ export default function OfferDetailsPage({ params }) {
           <Button
             variant="ghost"
             className="mr-2 p-0 h-auto"
-            onClick={() => router.push('/business/offers')}
+            onClick={() => router.push('/offers')}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -305,7 +317,7 @@ export default function OfferDetailsPage({ params }) {
                 variant="outline"
                 size="sm"
                 className="mt-2"
-                onClick={() => router.push('/business/offers')}
+                onClick={() => router.push('/offers')}
               >
                 Return to offers
               </Button>
@@ -323,7 +335,7 @@ export default function OfferDetailsPage({ params }) {
           <Button
             variant="ghost"
             className="mr-2 p-0 h-auto"
-            onClick={() => router.push('/business/offers')}
+            onClick={() => router.push('/offers')} // Changed from '/business/offers'
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -334,7 +346,7 @@ export default function OfferDetailsPage({ params }) {
             <div className="text-center">
               <p className="mb-4">The offer you are looking for could not be found.</p>
               <Button
-                onClick={() => router.push('/business/offers')}
+                onClick={() => router.push('/offers')}
               >
                 View All Offers
               </Button>
@@ -349,8 +361,8 @@ export default function OfferDetailsPage({ params }) {
   const remainingDays = calculateRemainingDays();
   const discountedPrice = calculateDiscountedPrice();
   const savings = calculateSavings();
-  const claimPercentage = offer.max_claims 
-    ? Math.round((offer.current_claims / offer.max_claims) * 100) 
+  const claimPercentage = offer.max_claims
+    ? Math.round((offer.current_claims / offer.max_claims) * 100)
     : 0;
 
   return (
@@ -360,7 +372,7 @@ export default function OfferDetailsPage({ params }) {
           <Button
             variant="ghost"
             className="mr-2 p-0 h-auto"
-            onClick={() => router.push('/business/offers')}
+            onClick={() => router.push('/offers')}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -372,7 +384,7 @@ export default function OfferDetailsPage({ params }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push(`/business/offers/${id}/edit`)}
+            onClick={() => router.push(`/offers/${id}/edit`)}
           >
             <Edit className="h-4 w-4 mr-2" />
             Edit
@@ -425,7 +437,7 @@ export default function OfferDetailsPage({ params }) {
                       <p className="font-medium">
                         {offer.products?.name}
                       </p>
-                      <Link 
+                      <Link
                         href={`/business/products/${offer.product_id}`}
                         className="text-sm text-blue-600 hover:underline"
                       >
@@ -578,35 +590,35 @@ export default function OfferDetailsPage({ params }) {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Button 
+                <Button
                   variant="outline"
                   className="justify-start"
-                  onClick={() => router.push(`/business/offers/${id}/edit`)}
+                  onClick={() => router.push(`/offers/${id}/edit`)}
                 >
                   <Edit className="h-4 w-4 mr-2" />
                   Edit Offer
                 </Button>
-                
-                <Button 
-                  variant="outline" 
+
+                <Button
+                  variant="outline"
                   className="justify-start"
-                  onClick={() => router.push(`/business/offers/analytics?offerId=${id}`)}
+                  onClick={() => router.push(`/offers/analytics?offerId=${id}`)}
                 >
                   <TrendingUp className="h-4 w-4 mr-2" />
                   View Analytics
                 </Button>
-                
-                <Button 
-                  variant="outline" 
+
+                <Button
+                  variant="outline"
                   className="justify-start"
                   disabled
                 >
                   <Share2 className="h-4 w-4 mr-2" />
                   Share Offer
                 </Button>
-                
-                <Button 
-                  variant="outline" 
+
+                <Button
+                  variant="outline"
                   className="justify-start text-red-600 hover:text-red-800 hover:bg-red-50"
                   onClick={() => setShowDeleteDialog(true)}
                 >
@@ -633,9 +645,9 @@ export default function OfferDetailsPage({ params }) {
                   emptyIcon={<div className="flex items-center justify-center h-full text-gray-400">No image</div>}
                 />
               </div>
-              
+
               <h3 className="font-medium text-lg mb-1">{offer.products?.name}</h3>
-              
+
               <div className="flex items-center space-x-2 mb-4">
                 <Badge className={statusColors[status.color]}>
                   {status.label}
@@ -646,7 +658,7 @@ export default function OfferDetailsPage({ params }) {
                   </Badge>
                 )}
               </div>
-              
+
               <div className="space-y-4">
                 <div>
                   <div className="text-3xl font-bold text-blue-600">
@@ -656,22 +668,22 @@ export default function OfferDetailsPage({ params }) {
                     {formatPrice(offer.products?.price)} → <span className="text-green-600 font-medium">{formatPrice(discountedPrice)}</span>
                   </div>
                 </div>
-                
+
                 <Separator />
-                
+
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-500">Validity:</span>
                     <span>{formatDate(offer.start_date)} - {formatDate(offer.expiry_date)}</span>
                   </div>
-                  
+
                   {offer.discount_code && (
                     <div className="flex justify-between">
                       <span className="text-gray-500">Code:</span>
                       <span className="font-mono">{offer.discount_code}</span>
                     </div>
                   )}
-                  
+
                   {offer.max_claims !== null && (
                     <div className="flex justify-between">
                       <span className="text-gray-500">Claims:</span>
@@ -679,12 +691,12 @@ export default function OfferDetailsPage({ params }) {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="pt-3">
-                  <Button className="w-full" 
+                  <Button className="w-full"
                     variant={status.color === 'destructive' ? 'outline' : 'default'}
                     disabled={status.color === 'destructive'}
-                    onClick={() => router.push(`/business/offers/${id}/edit`)}
+                    onClick={() => router.push(`/offers/${id}/edit`)}
                   >
                     {status.color === 'destructive' ? 'Offer Expired' : 'Edit Offer'}
                   </Button>

@@ -1,4 +1,4 @@
-// lib/offers.js
+// lib/offers.js - Updated version
 import { makeAuthenticatedRequest } from '@/lib/auth';
 
 class OffersService {
@@ -18,7 +18,7 @@ class OffersService {
       // Add filters
       if (params.search) queryParams.append('search', params.search);
       if (params.status) queryParams.append('status', params.status);
-      if (params.productId) queryParams.append('productId', params.productId);
+      if (params.productId) queryParams.append('product_id', params.productId);
       
       const url = `/business/offers${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
       const response = await makeAuthenticatedRequest(url);
@@ -61,13 +61,30 @@ class OffersService {
   // Create new offer
   async createOffer(offerData) {
     try {
+      // Transform the data to match what the backend expects
+      const payload = {
+        product_id: offerData.product_id,
+        discount_percentage: parseInt(offerData.discount_percentage),
+        discount_code: offerData.discount_code || null,
+        start_date: offerData.start_date,
+        expiry_date: offerData.expiry_date,
+        is_active: offerData.is_active || true,
+        max_claims: offerData.max_claims ? parseInt(offerData.max_claims) : null,
+        title: offerData.title,
+        description: offerData.description,
+        terms_conditions: offerData.terms_conditions
+      };
+
+      console.log('Sending offer payload:', payload);
+
       const response = await makeAuthenticatedRequest('/business/offers', {
         method: 'POST',
-        body: JSON.stringify(offerData),
+        body: JSON.stringify(payload),
       });
       
       if (!response || !response.ok) {
         const data = await response?.json();
+        console.error('Create offer error response:', data);
         if (data.detail) {
           if (Array.isArray(data.detail)) {
             const errorMessages = data.detail.map(err => {
@@ -93,13 +110,38 @@ class OffersService {
   // Update existing offer
   async updateOffer(offerId, offerData) {
     try {
+      // Transform the data to match what the backend expects
+      const payload = {};
+      
+      if (offerData.discount_percentage !== undefined) {
+        payload.discount_percentage = parseInt(offerData.discount_percentage);
+      }
+      if (offerData.discount_code !== undefined) {
+        payload.discount_code = offerData.discount_code || null;
+      }
+      if (offerData.start_date !== undefined) {
+        payload.start_date = offerData.start_date;
+      }
+      if (offerData.expiry_date !== undefined) {
+        payload.expiry_date = offerData.expiry_date;
+      }
+      if (offerData.is_active !== undefined) {
+        payload.is_active = offerData.is_active;
+      }
+      if (offerData.max_claims !== undefined) {
+        payload.max_claims = offerData.max_claims ? parseInt(offerData.max_claims) : null;
+      }
+
+      console.log('Sending update payload:', payload);
+
       const response = await makeAuthenticatedRequest(`/business/offers/${offerId}`, {
-        method: 'PUT',
-        body: JSON.stringify(offerData),
+        method: 'PATCH',
+        body: JSON.stringify(payload),
       });
       
       if (!response || !response.ok) {
         const data = await response?.json();
+        console.error('Update offer error response:', data);
         if (data.detail) {
           if (Array.isArray(data.detail)) {
             const errorMessages = data.detail.map(err => {
