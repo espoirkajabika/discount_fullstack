@@ -633,3 +633,451 @@ async def get_product_offers(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve product offers: {str(e)}"
         )
+
+
+# app/api/routes/business.py - Add these offer endpoints to the existing file
+
+# ============================================================================
+# OFFER MANAGEMENT WITH PAGINATION AND SEARCH
+# ============================================================================
+
+@router.get("/offers", response_model=dict)
+async def list_my_offers(
+    current_user: UserProfile = Depends(get_current_business_user),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    status: Optional[str] = Query(None, regex="^(active|inactive|expired|upcoming)$"),
+    product_id: Optional[str] = Query(None),
+    sortBy: str = Query("created_at", regex="^(created_at|expiry_date|discount_percentage|current_claims)$"),
+    sortOrder: str = Query("desc", regex="^(asc|desc)$")
+):
+    """List offers for the current business with pagination and search"""
+    
+    try:
+        # Get user's business
+        business_result = supabase_admin.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
+        
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
+        
+        business_id = business_result.data[0]["id"]
+        current_time = datetime.utcnow().isoformat()
+        
+        # Build query
+        query = supabase_admin.table("offers").select(
+            "*, products(*, categories(*)), businesses(business_name)", 
+            count="exact"
+        ).eq("business_id", business_id)
+        
+        # Apply search filter
+        if search:
+            query = query.or_(f"title.ilike.%{search}%,description.ilike.%{search}%")
+        
+        # Apply status filter
+        if status:
+            if status == "active":
+                query = query.eq("is_active", True).lte("start_date", current_time).gte("expiry_date", current_time)
+            elif status == "inactive":
+                query = query.eq("is_active", False)
+            elif status == "expired":
+                query = query.lt("expiry_date", current_time)
+            elif status == "upcoming":
+                query = query.gt("start_date", current_time)
+        
+        # Apply product filter
+        if product_id:
+            query = query.eq("product_id", product_id)
+        
+        # Apply sorting
+        desc_order = sortOrder == "desc"
+        query = query.order(sortBy, desc=desc_order)
+        
+        # Apply pagination
+        offset = (page - 1) * limit
+        query = query.range(offset, offset + limit - 1)
+        
+        result = query.execute()
+        
+        total = result.count if result.count else 0
+        total_pages = (total + limit - 1) // limit
+        
+        # Convert any Decimal fields to float and fix structure
+        offers_data = []
+        for offer in result.data:
+            offer_data = convert_decimals_to_float(offer)
+            # Rename 'products' to 'product' for frontend consistency
+            if 'products' in offer_data:
+                offer_data['product'] = offer_data['products']
+                del offer_data['products']
+            offers_data.append(offer_data)
+        
+        return {
+            "offers": offers_data,
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "totalPages": total_pages
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error listing offers: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve offers: {str(e)}"
+        )
+
+
+@router.post("/offers", response_model=dict)
+async def create_offer(
+    offer_data: dict,  # Use dict to handle the frontend data structure
+    current_user: UserProfile = Depends(get_current_business_user)
+):
+    """Create a new offer for the current business"""
+    
+    try:
+        print(f"Creating offer for user: {current_user.id}")
+        print(f"Offer data: {offer_data}")
+        
+        # Get user's business
+        business_result = supabase_admin.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
+        
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found. Please register your business first."
+            )
+        
+        business_id = business_result.data[0]["id"]
+        
+        # Validate product exists and belongs to business
+        if offer_data.get("product_id"):
+            product_check = supabase_admin.table("products").select("id, name, price").eq("id", offer_data["product_id"]).eq("business_id", business_id).execute()
+            if not product_check.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid product ID or product doesn't belong to your business"
+                )
+            product = product_check.data[0]
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Product ID is required"
+            )
+        
+        # Generate offer title if not provided
+        if not offer_data.get("title"):
+            offer_data["title"] = f"{offer_data['discount_percentage']}% Off {product['name']}"
+        
+        # Calculate prices
+        original_price = float(product["price"]) if product["price"] else 0
+        discount_percentage = float(offer_data["discount_percentage"])
+        discount_amount = original_price * (discount_percentage / 100)
+        discounted_price = original_price - discount_amount
+        
+        # Create offer record
+        offer_dict = {
+            "id": str(uuid.uuid4()),
+            "business_id": business_id,
+            "product_id": offer_data["product_id"],
+            "title": offer_data["title"],
+            "description": offer_data.get("description"),
+            "discount_type": "percentage",
+            "discount_value": discount_percentage,
+            "original_price": original_price,
+            "discounted_price": discounted_price,
+            "start_date": offer_data["start_date"],
+            "expiry_date": offer_data["expiry_date"],
+            "max_claims": int(offer_data["max_claims"]) if offer_data.get("max_claims") else None,
+            "current_claims": 0,
+            "is_active": offer_data.get("is_active", True),
+            "terms_conditions": offer_data.get("terms_conditions")
+        }
+        
+        # Convert data for Supabase
+        offer_dict = prepare_data_for_supabase(offer_dict)
+        
+        print(f"Inserting offer: {offer_dict}")
+        
+        # Insert offer
+        result = supabase_admin.table("offers").insert(offer_dict).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create offer"
+            )
+        
+        # Get offer with product info
+        offer_with_product = supabase_admin.table("offers").select(
+            "*, products(*, categories(*)), businesses(business_name)"
+        ).eq("id", result.data[0]["id"]).execute()
+        
+        # Convert and fix structure
+        offer_response = convert_decimals_to_float(offer_with_product.data[0])
+        if 'products' in offer_response:
+            offer_response['product'] = offer_response['products']
+            del offer_response['products']
+        
+        return {"offer": offer_response}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error creating offer: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Offer creation failed: {str(e)}"
+        )
+
+
+@router.get("/offers/{offer_id}", response_model=dict)
+async def get_offer(
+    offer_id: str,
+    current_user: UserProfile = Depends(get_current_business_user)
+):
+    """Get a specific offer owned by the current business"""
+    
+    try:
+        # Get user's business
+        business_result = supabase_admin.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
+        
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
+        
+        business_id = business_result.data[0]["id"]
+        
+        # Get offer
+        result = supabase_admin.table("offers").select(
+            "*, products(*, categories(*)), businesses(business_name)"
+        ).eq("id", offer_id).eq("business_id", business_id).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offer not found"
+            )
+        
+        # Convert and fix structure
+        offer_data = convert_decimals_to_float(result.data[0])
+        if 'products' in offer_data:
+            offer_data['product'] = offer_data['products']
+            del offer_data['products']
+        
+        return {"offer": offer_data}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve offer: {str(e)}"
+        )
+
+
+@router.patch("/offers/{offer_id}", response_model=dict)
+async def update_offer(
+    offer_id: str,
+    offer_update: dict,  # Use dict to handle frontend data structure
+    current_user: UserProfile = Depends(get_current_business_user)
+):
+    """Update an offer owned by the current business"""
+    
+    try:
+        # Get user's business
+        business_result = supabase_admin.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
+        
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
+        
+        business_id = business_result.data[0]["id"]
+        
+        # Get current offer
+        current_offer = supabase_admin.table("offers").select("*, products(price)").eq("id", offer_id).eq("business_id", business_id).execute()
+        
+        if not current_offer.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offer not found"
+            )
+        
+        current_data = current_offer.data[0]
+        
+        # Prepare update data
+        update_data = {}
+        
+        # Update fields that are provided
+        if "discount_percentage" in offer_update:
+            discount_percentage = float(offer_update["discount_percentage"])
+            update_data["discount_value"] = discount_percentage
+            
+            # Recalculate prices if discount changed
+            original_price = float(current_data["products"]["price"]) if current_data["products"]["price"] else 0
+            discount_amount = original_price * (discount_percentage / 100)
+            discounted_price = original_price - discount_amount
+            update_data["discounted_price"] = discounted_price
+        
+        # Map frontend fields to database fields
+        field_mapping = {
+            "discount_code": "discount_code",
+            "start_date": "start_date",
+            "expiry_date": "expiry_date",
+            "is_active": "is_active",
+            "max_claims": "max_claims"
+        }
+        
+        for frontend_field, db_field in field_mapping.items():
+            if frontend_field in offer_update:
+                update_data[db_field] = offer_update[frontend_field]
+        
+        if not update_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No valid fields to update"
+            )
+        
+        update_data["updated_at"] = datetime.utcnow().isoformat()
+        
+        # Convert data for Supabase
+        update_data = prepare_data_for_supabase(update_data)
+        
+        # Update offer
+        result = supabase_admin.table("offers").update(update_data).eq("id", offer_id).eq("business_id", business_id).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offer not found"
+            )
+        
+        # Get updated offer with product info
+        offer_with_product = supabase_admin.table("offers").select(
+            "*, products(*, categories(*)), businesses(business_name)"
+        ).eq("id", result.data[0]["id"]).execute()
+        
+        # Convert and fix structure
+        offer_response = convert_decimals_to_float(offer_with_product.data[0])
+        if 'products' in offer_response:
+            offer_response['product'] = offer_response['products']
+            del offer_response['products']
+        
+        return {"offer": offer_response}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error updating offer: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Offer update failed: {str(e)}"
+        )
+
+
+@router.patch("/offers/{offer_id}/status", response_model=dict)
+async def update_offer_status(
+    offer_id: str,
+    status_data: dict,
+    current_user: UserProfile = Depends(get_current_business_user)
+):
+    """Update offer status (activate/deactivate)"""
+    
+    try:
+        # Get user's business
+        business_result = supabase_admin.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
+        
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
+        
+        business_id = business_result.data[0]["id"]
+        
+        # Update offer status
+        update_data = {
+            "is_active": status_data.get("is_active", True),
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        result = supabase_admin.table("offers").update(update_data).eq("id", offer_id).eq("business_id", business_id).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offer not found"
+            )
+        
+        # Get updated offer with product info
+        offer_with_product = supabase_admin.table("offers").select(
+            "*, products(*, categories(*)), businesses(business_name)"
+        ).eq("id", result.data[0]["id"]).execute()
+        
+        # Convert and fix structure
+        offer_response = convert_decimals_to_float(offer_with_product.data[0])
+        if 'products' in offer_response:
+            offer_response['product'] = offer_response['products']
+            del offer_response['products']
+        
+        return {"offer": offer_response}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Status update failed: {str(e)}"
+        )
+
+
+@router.delete("/offers/{offer_id}", response_model=MessageResponse)
+async def delete_offer(
+    offer_id: str,
+    current_user: UserProfile = Depends(get_current_business_user)
+):
+    """Delete an offer owned by the current business"""
+    
+    try:
+        # Get user's business
+        business_result = supabase_admin.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
+        
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
+        
+        business_id = business_result.data[0]["id"]
+        
+        # Delete offer
+        result = supabase_admin.table("offers").delete().eq("id", offer_id).eq("business_id", business_id).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offer not found"
+            )
+        
+        return MessageResponse(message="Offer deleted successfully")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Offer deletion failed: {str(e)}"
+        )
