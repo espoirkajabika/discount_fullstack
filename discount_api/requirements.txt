@@ -47,3 +47,9 @@ yarl==1.20.0
 # Additional dependencies for business functionality (Windows-friendly)
 requests==2.32.3
 python-multipart==0.0.9
+
+# Image processing dependencies
+Pillow==10.4.0
+
+# Pydantic settings
+pydantic-settings==2.6.1

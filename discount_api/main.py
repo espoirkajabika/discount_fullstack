@@ -1,5 +1,7 @@
 import sys
 import asyncio
+import json
+from decimal import Decimal
 
 # Fix for Windows psycopg3 compatibility
 if sys.platform == "win32":
@@ -7,10 +9,33 @@ if sys.platform == "win32":
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.encoders import jsonable_encoder
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.database import check_database_health
 from app.api.routes import auth, health, business, categories, customer
+
+
+# Custom JSON encoder to handle Decimal objects
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super(DecimalEncoder, self).default(obj)
+
+
+# Monkey patch the default encoder
+def custom_jsonable_encoder(obj, **kwargs):
+    """Custom JSON encoder that handles Decimal objects"""
+    if isinstance(obj, dict):
+        return {key: custom_jsonable_encoder(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [custom_jsonable_encoder(item) for item in obj]
+    elif isinstance(obj, Decimal):
+        return float(obj)
+    else:
+        return jsonable_encoder(obj, **kwargs)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -32,6 +57,7 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     print(f"Shutting down {settings.app_name}...")
+
 
 # Create FastAPI application
 app = FastAPI(
