@@ -4,11 +4,28 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { use } from 'react'; // Import the use function
 import Link from 'next/link';
+import { getOffer, updateOffer } from '@/lib/offers';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { AlertCircle, ArrowLeft, Calendar, Percent } from 'lucide-react';
+import { 
+  AlertCircle, 
+  ArrowLeft, 
+  Calendar, 
+  Percent,
+  Building2,
+  Home,
+  Package,
+  Tag,
+  DollarSign,
+  Clock,
+  Users,
+  FileText,
+  Save,
+  Eye,
+  AlertTriangle
+} from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
 import {
@@ -29,6 +46,121 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Switch } from "@/components/ui/switch";
 import { StorageImage } from '@/components/ui/storage-image';
 import { Badge } from '@/components/ui/badge';
+
+// Page components
+function PageContainer({ children, className = "" }) {
+  return (
+    <div className={`min-h-screen bg-gradient-to-br from-green-50 to-yellow-50 ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function PageHeader({ 
+  title, 
+  subtitle, 
+  backButton = true, 
+  backUrl = null,
+  backLabel = "Back",
+  children 
+}) {
+  const router = useRouter();
+
+  const handleBack = () => {
+    if (backUrl) {
+      router.push(backUrl);
+    } else {
+      router.back();
+    }
+  };
+
+  return (
+    <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Top navigation bar with logo */}
+        <div className="flex items-center justify-between h-16 border-b border-gray-100">
+          <div className="flex items-center space-x-4">
+            <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
+              <Building2 className="h-5 w-5 text-white" />
+            </div>
+            
+            {/* Breadcrumbs */}
+            <nav className="flex items-center space-x-2 text-sm">
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="flex items-center space-x-1 text-gray-500 hover:text-green-600 transition-colors"
+              >
+                <Home className="h-4 w-4" />
+                <span>Dashboard</span>
+              </button>
+              <span className="text-gray-400">/</span>
+              <button
+                onClick={() => router.push('/offers')}
+                className="text-gray-500 hover:text-green-600 transition-colors"
+              >
+                Offers
+              </button>
+              <span className="text-gray-400">/</span>
+              <span className="text-gray-900 font-medium">Edit</span>
+            </nav>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push('/dashboard')}
+              className="text-gray-600 hover:text-green-600"
+            >
+              <Home className="h-4 w-4 mr-2" />
+              Dashboard
+            </Button>
+          </div>
+        </div>
+
+        {/* Page header */}
+        <div className="py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center space-x-4">
+              {backButton && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleBack}
+                  className="flex-shrink-0 -ml-2 text-gray-600 hover:text-green-600"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  {backLabel}
+                </Button>
+              )}
+              
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+                {subtitle && (
+                  <p className="text-gray-600 mt-1">{subtitle}</p>
+                )}
+              </div>
+            </div>
+
+            {children && (
+              <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row gap-3">
+                {children}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContentContainer({ children, className = "" }) {
+  return (
+    <div className={`max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 ${className}`}>
+      {children}
+    </div>
+  );
+}
 
 export default function EditOfferPage({ params }) {
   // Use the React.use method to unwrap the params
@@ -59,16 +191,15 @@ export default function EditOfferPage({ params }) {
       setError('');
 
       try {
-        const response = await fetch(`/api/business/offers/${id}`, {
-          credentials: 'include',
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch offer details');
+        // Use the getOffer function from lib
+        const result = await getOffer(id);
+        
+        if (result.error) {
+          setError(result.error);
+          return;
         }
-
-        const data = await response.json();
-        const offer = data.offer;
+        
+        const offer = result.offer;
         setOriginalOffer(offer);
 
         // Set the product - handle both 'product' and 'products' keys
@@ -90,7 +221,7 @@ export default function EditOfferPage({ params }) {
         });
       } catch (err) {
         console.error('Error fetching offer:', err);
-        setError(err.message);
+        setError('Failed to fetch offer details');
       } finally {
         setIsLoading(false);
       }
@@ -99,10 +230,6 @@ export default function EditOfferPage({ params }) {
     fetchOffer();
   }, [id]);
 
-
-
-
-
   // Handle text input changes
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -110,6 +237,9 @@ export default function EditOfferPage({ params }) {
       ...prev,
       [name]: value
     }));
+    
+    // Clear error when user starts typing
+    if (error) setError('');
   };
 
   // Handle discount percentage input (numbers only, max 100)
@@ -122,6 +252,8 @@ export default function EditOfferPage({ params }) {
         discount_percentage: value
       }));
     }
+    
+    if (error) setError('');
   };
 
   // Handle max claims input (numbers only)
@@ -176,6 +308,21 @@ export default function EditOfferPage({ params }) {
       return { label: "Active", color: "green" };
     }
     return { label: "Inactive", color: "gray" };
+  };
+
+  // Check if form has changes
+  const hasChanges = () => {
+    if (!originalOffer) return false;
+    
+    return (
+      formData.discount_percentage !== (originalOffer.discount_value || originalOffer.discount_percentage || 0).toString() ||
+      formData.discount_code !== (originalOffer.discount_code || '') ||
+      formData.start_date?.toISOString() !== originalOffer.start_date ||
+      formData.expiry_date?.toISOString() !== originalOffer.expiry_date ||
+      formData.is_active !== originalOffer.is_active ||
+      formData.has_max_claims !== (originalOffer.max_claims !== null) ||
+      (formData.has_max_claims && formData.max_claims !== (originalOffer.max_claims?.toString() || ''))
+    );
   };
 
   // Form validation
@@ -257,26 +404,19 @@ export default function EditOfferPage({ params }) {
 
       console.log('Updating offer with payload:', payload);
 
-      const response = await fetch(`/api/business/offers/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-        credentials: 'include',
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || data.detail || 'Failed to update offer');
+      // Use the updateOffer function from lib
+      const result = await updateOffer(id, payload);
+      
+      if (result.error) {
+        setError(result.error);
+        return;
       }
 
       // Redirect to the offer page
       router.push(`/offers/${id}`);
     } catch (err) {
       console.error('Error updating offer:', err);
-      setError(err.message);
+      setError('Failed to update offer. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -303,65 +443,65 @@ export default function EditOfferPage({ params }) {
 
   // Status colors
   const statusColors = {
-    green: "bg-green-100 text-green-800",
-    yellow: "bg-yellow-100 text-yellow-800",
-    destructive: "bg-red-100 text-red-800",
-    gray: "bg-gray-100 text-gray-800",
+    green: "bg-green-100 text-green-800 border-green-200",
+    yellow: "bg-yellow-100 text-yellow-800 border-yellow-200",
+    destructive: "bg-red-100 text-red-800 border-red-200",
+    gray: "bg-gray-100 text-gray-800 border-gray-200",
   };
 
   // Loading state
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center mb-6">
-          <Button
-            variant="ghost"
-            className="mr-2 p-0 h-auto"
-            onClick={() => router.back()}
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-2xl font-bold">Edit Offer</h1>
-        </div>
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
-      </div>
+      <PageContainer>
+        <PageHeader
+          title="Edit Offer"
+          subtitle="Loading offer information..."
+          backUrl={`/offers/${id}`}
+          backLabel="Back to Offer"
+        />
+        <ContentContainer>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-6">
+              <Card className="border-0 shadow-lg bg-white">
+                <CardContent className="p-6">
+                  <div className="space-y-4">
+                    <div className="h-8 w-3/4 bg-gray-200 animate-pulse rounded"></div>
+                    <div className="h-4 w-1/2 bg-gray-200 animate-pulse rounded"></div>
+                    <div className="h-20 w-full bg-gray-200 animate-pulse rounded"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="space-y-6">
+              <Card className="border-0 shadow-lg bg-white">
+                <CardContent className="p-6">
+                  <div className="h-32 w-full bg-gray-200 animate-pulse rounded"></div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </ContentContainer>
+      </PageContainer>
     );
   }
 
   // Error state
   if (error && isLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center mb-6">
-          <Button
-            variant="ghost"
-            className="mr-2 p-0 h-auto"
-            onClick={() => router.back()}
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-2xl font-bold">Edit Offer</h1>
-        </div>
-        <Alert variant="destructive" className="mb-6">
-          <AlertCircle className="h-5 w-5 mr-2" />
-          <AlertDescription>
-            <div>
-              <h3 className="font-medium">Error loading offer</h3>
-              <p>{error}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2"
-                onClick={() => router.push('/business/offers')}
-              >
-                Return to offers
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
-      </div>
+      <PageContainer>
+        <PageHeader
+          title="Edit Offer"
+          subtitle="Unable to load offer information"
+          backUrl={`/offers/${id}`}
+          backLabel="Back to Offer"
+        />
+        <ContentContainer>
+          <Alert variant="destructive" className="bg-red-50 border-red-200">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-red-800">{error}</AlertDescription>
+          </Alert>
+        </ContentContainer>
+      </PageContainer>
     );
   }
 
@@ -369,78 +509,104 @@ export default function EditOfferPage({ params }) {
   const isExpired = status.color === 'destructive';
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex items-center mb-6">
-        <Button
-          variant="ghost"
-          className="mr-2 p-0 h-auto"
-          onClick={() => router.push(`/business/offers/${id}`)}
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <h1 className="text-2xl font-bold">Edit Offer</h1>
-        <Badge className={`ml-3 ${statusColors[status.color]}`}>
-          {status.label}
-        </Badge>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="Edit Offer"
+        subtitle="Update your offer details and settings"
+        backUrl={`/offers/${id}`}
+        backLabel="Back to Offer"
+      >
+        <div className="flex items-center gap-3">
+          <Badge className={`${statusColors[status.color]} font-medium px-3 py-1`}>
+            {status.label}
+          </Badge>
+          <Button
+            variant="outline"
+            onClick={() => router.push(`/offers/${id}`)}
+            className="border-gray-200 hover:bg-gray-50"
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            View Offer
+          </Button>
+        </div>
+      </PageHeader>
 
-      {error && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertCircle className="h-4 w-4 mr-2" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      <ContentContainer>
+        {error && (
+          <Alert variant="destructive" className="mb-6 bg-red-50 border-red-200">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-red-800">{error}</AlertDescription>
+          </Alert>
+        )}
 
-      {isExpired && (
-        <Alert className="mb-6">
-          <AlertCircle className="h-4 w-4 mr-2" />
-          <AlertDescription>
-            This offer has expired. While you can still edit it, customers won't be able to redeem it unless you extend the expiry date.
-          </AlertDescription>
-        </Alert>
-      )}
+        {isExpired && (
+          <Alert className="mb-6 bg-yellow-50 border-yellow-200">
+            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+            <AlertDescription className="text-yellow-800">
+              This offer has expired. While you can still edit it, customers won't be able to redeem it unless you extend the expiry date.
+            </AlertDescription>
+          </Alert>
+        )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Offer Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-4">
-                  <div>
-                    <Label>Product</Label>
-                    <div className="flex items-center mt-1 p-3 border rounded-md bg-gray-50">
-                      <div className="h-10 w-10 bg-gray-100 rounded-md overflow-hidden flex-shrink-0 mr-3">
-                        <StorageImage
-                          path={product?.image_url}
-                          alt={product?.name}
-                          className="w-full h-full object-cover"
-                          fallbackSize="40x40"
-                          emptyIcon={<p className="text-gray-400 text-xs">No image</p>}
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium">{product?.name}</p>
-                        <p className="text-sm text-gray-500">{formatPrice(product?.price)}</p>
-                      </div>
-                      <Link
-                        href={`/business/products/${product?.id}`}
-                        className="text-sm text-blue-600 hover:underline"
-                      >
-                        View product
-                      </Link>
+        <form onSubmit={handleSubmit} className="space-y-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Main Form - Left Side */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Product Information */}
+              <Card className="border-0 shadow-lg bg-white">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg text-gray-900">
+                    <Package className="h-5 w-5 mr-2 text-green-600" />
+                    Product Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center p-4 border border-gray-200 rounded-lg bg-gray-50">
+                    <div className="h-12 w-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 mr-4">
+                      <StorageImage
+                        path={product?.image_url}
+                        alt={product?.name}
+                        className="w-full h-full object-cover"
+                        fallbackSize="48x48"
+                        emptyIcon={
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Package className="h-6 w-6 text-gray-400" />
+                          </div>
+                        }
+                      />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      The product cannot be changed. Create a new offer to use a different product.
-                    </p>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900">{product?.name}</p>
+                      <p className="text-sm text-gray-500">{formatPrice(product?.price)}</p>
+                    </div>
+                    <Link
+                      href={`/products/${product?.id}`}
+                      className="text-sm text-green-600 hover:text-green-700 hover:underline font-medium"
+                    >
+                      View Product
+                    </Link>
                   </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    The product cannot be changed. Create a new offer to use a different product.
+                  </p>
+                </CardContent>
+              </Card>
 
+              {/* Discount Settings */}
+              <Card className="border-0 shadow-lg bg-white">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg text-gray-900">
+                    <Percent className="h-5 w-5 mr-2 text-green-600" />
+                    Discount Settings
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="discount_percentage" className="required">Discount Percentage</Label>
-                      <div className="relative mt-1">
+                      <Label htmlFor="discount_percentage" className="text-gray-700 font-semibold">
+                        Discount Percentage *
+                      </Label>
+                      <div className="relative mt-2">
                         <Input
                           id="discount_percentage"
                           name="discount_percentage"
@@ -449,9 +615,9 @@ export default function EditOfferPage({ params }) {
                           onChange={handleDiscountChange}
                           placeholder="10"
                           required
-                          className="pr-9"
+                          className="h-12 pr-12 bg-gray-50 border-gray-200 focus:border-green-500 focus:ring-green-500"
                         />
-                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
                           <Percent className="h-4 w-4 text-gray-400" />
                         </div>
                       </div>
@@ -461,7 +627,9 @@ export default function EditOfferPage({ params }) {
                     </div>
 
                     <div>
-                      <Label htmlFor="discount_code">Discount Code (Optional)</Label>
+                      <Label htmlFor="discount_code" className="text-gray-700 font-semibold">
+                        Discount Code (Optional)
+                      </Label>
                       <Input
                         id="discount_code"
                         name="discount_code"
@@ -469,23 +637,36 @@ export default function EditOfferPage({ params }) {
                         value={formData.discount_code}
                         onChange={handleChange}
                         placeholder="SUMMER2025"
-                        className="mt-1"
+                        className="mt-2 h-12 bg-gray-50 border-gray-200 focus:border-green-500 focus:ring-green-500"
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         Leave blank if no code is required
                       </p>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
 
+              {/* Offer Period */}
+              <Card className="border-0 shadow-lg bg-white">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg text-gray-900">
+                    <Calendar className="h-5 w-5 mr-2 text-green-600" />
+                    Offer Period
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="start_date" className="required">Start Date</Label>
-                      <div className="mt-1">
+                      <Label htmlFor="start_date" className="text-gray-700 font-semibold">
+                        Start Date *
+                      </Label>
+                      <div className="mt-2">
                         <Popover>
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
-                              className="w-full justify-start text-left font-normal"
+                              className="w-full justify-start text-left font-normal h-12 bg-gray-50 border-gray-200 focus:border-green-500 focus:ring-green-500"
                             >
                               <Calendar className="mr-2 h-4 w-4" />
                               {formData.start_date ? (
@@ -508,13 +689,15 @@ export default function EditOfferPage({ params }) {
                     </div>
 
                     <div>
-                      <Label htmlFor="expiry_date" className="required">Expiry Date</Label>
-                      <div className="mt-1">
+                      <Label htmlFor="expiry_date" className="text-gray-700 font-semibold">
+                        Expiry Date *
+                      </Label>
+                      <div className="mt-2">
                         <Popover>
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
-                              className="w-full justify-start text-left font-normal"
+                              className="w-full justify-start text-left font-normal h-12 bg-gray-50 border-gray-200 focus:border-green-500 focus:ring-green-500"
                             >
                               <Calendar className="mr-2 h-4 w-4" />
                               {formData.expiry_date ? (
@@ -539,35 +722,58 @@ export default function EditOfferPage({ params }) {
                       </div>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="flex items-center space-x-2 mt-2">
+              {/* Additional Settings */}
+              <Card className="border-0 shadow-lg bg-white">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg text-gray-900">
+                    <Users className="h-5 w-5 mr-2 text-green-600" />
+                    Additional Settings
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="flex items-center space-x-3">
                       <Switch
                         id="is_active"
                         checked={formData.is_active}
                         onCheckedChange={handleActiveToggle}
                         disabled={isExpired}
                       />
-                      <Label htmlFor="is_active" className="cursor-pointer">
-                        Activate offer immediately
-                      </Label>
+                      <div>
+                        <Label htmlFor="is_active" className="text-gray-700 font-semibold cursor-pointer">
+                          Activate offer immediately
+                        </Label>
+                        <p className="text-xs text-gray-500">
+                          Make this offer available to customers
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="flex items-center space-x-2 mt-2">
+                    <div className="flex items-center space-x-3">
                       <Checkbox
                         id="has_max_claims"
                         checked={formData.has_max_claims}
                         onCheckedChange={handleMaxClaimsToggle}
                       />
-                      <Label htmlFor="has_max_claims" className="cursor-pointer">
-                        Limit maximum claims
-                      </Label>
+                      <div>
+                        <Label htmlFor="has_max_claims" className="text-gray-700 font-semibold cursor-pointer">
+                          Limit maximum claims
+                        </Label>
+                        <p className="text-xs text-gray-500">
+                          Set a maximum number of claims
+                        </p>
+                      </div>
                     </div>
                   </div>
 
                   {formData.has_max_claims && (
                     <div>
-                      <Label htmlFor="max_claims">Maximum Claims</Label>
+                      <Label htmlFor="max_claims" className="text-gray-700 font-semibold">
+                        Maximum Claims
+                      </Label>
                       <Input
                         id="max_claims"
                         name="max_claims"
@@ -575,134 +781,227 @@ export default function EditOfferPage({ params }) {
                         value={formData.max_claims}
                         onChange={handleMaxClaimsChange}
                         placeholder="100"
-                        className="mt-1 max-w-[200px]"
+                        className="mt-2 h-12 max-w-xs bg-gray-50 border-gray-200 focus:border-green-500 focus:ring-green-500"
                       />
 
                       {originalOffer && originalOffer.current_claims > 0 && (
-                        <p className="text-xs text-amber-600 mt-1">
-                          Currently {originalOffer.current_claims} claims used.
-                          New maximum must be greater than or equal to this amount.
-                        </p>
+                        <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <p className="text-sm text-yellow-800">
+                            <strong>Note:</strong> Currently {originalOffer.current_claims} claims have been used. 
+                            New maximum must be greater than or equal to this amount.
+                          </p>
+                        </div>
                       )}
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500 mt-2">
                         Enter the maximum number of times this offer can be claimed
                       </p>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            </div>
 
-                  <div className="flex justify-end space-x-3 pt-4 border-t">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => router.push(`/business/offers/${id}`)}
-                      disabled={isSubmitting}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <span className="animate-spin mr-2">⋮</span>
-                          Saving...
-                        </>
-                      ) : 'Save Changes'}
-                    </Button>
-                  </div>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Offer Preview</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div>
-                <div className="aspect-square bg-gray-100 rounded-md overflow-hidden mb-4">
-                  <StorageImage
-                    path={product?.image_url}
-                    alt={product?.name}
-                    className="w-full h-full object-cover"
-                    fallbackSize="300x300"
-                    emptyIcon={<p className="flex items-center justify-center h-full text-gray-400">No image</p>}
-                  />
-                </div>
-
-                <h3 className="font-medium text-lg">{product?.name}</h3>
-
-                <div className="mt-3 grid grid-cols-2 gap-1">
-                  <div className="text-gray-500">Original price:</div>
-                  <div className="text-right">{formatPrice(product?.price)}</div>
-
-                  {formData.discount_percentage && (
-                    <>
-                      <div className="text-gray-500">Discount:</div>
-                      <div className="text-right text-red-600">-{formData.discount_percentage}%</div>
-
-                      <div className="text-gray-500 font-medium">Final price:</div>
-                      <div className="text-right font-bold text-green-600">
-                        {formatPrice(calculateDiscountedPrice())}
+            {/* Preview Panel - Right Side */}
+            <div className="lg:col-span-1">
+              <div className="sticky top-24 space-y-6">
+                {/* Changes Indicator */}
+                {hasChanges() && (
+                  <Card className="border-0 shadow-lg bg-white border-yellow-200">
+                    <CardContent className="p-4">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                        <p className="text-sm text-yellow-800 font-medium">
+                          You have unsaved changes
+                        </p>
                       </div>
-                    </>
-                  )}
-                </div>
+                    </CardContent>
+                  </Card>
+                )}
 
-                <Separator className="my-4" />
+                {/* Offer Preview */}
+                <Card className="border-0 shadow-lg bg-white">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-lg text-gray-900">
+                      <Tag className="h-5 w-5 mr-2 text-green-600" />
+                      Offer Preview
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+                        <StorageImage
+                          path={product?.image_url}
+                          alt={product?.name}
+                          className="w-full h-full object-cover"
+                          fallbackSize="300x300"
+                          emptyIcon={
+                            <div className="text-center">
+                              <Package className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+                              <p className="text-sm text-gray-500">No image</p>
+                            </div>
+                          }
+                        />
+                      </div>
 
-                <div className="space-y-2 text-sm">
-                  {formData.discount_code && (
-                    <div>
-                      <span className="text-gray-500">Code: </span>
-                      <span className="font-mono bg-gray-100 px-1 py-0.5 rounded">
-                        {formData.discount_code}
-                      </span>
+                      <div>
+                        <h3 className="font-semibold text-lg text-gray-900">{product?.name}</h3>
+                        
+                        {formData.discount_percentage && (
+                          <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                            <div className="flex items-center justify-center">
+                              <div className="bg-green-600 text-white px-3 py-1 rounded-full font-bold">
+                                {formData.discount_percentage}% OFF
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-500">Original price:</span>
+                          <p className="font-medium text-gray-900">
+                            {formatPrice(product?.price)}
+                          </p>
+                        </div>
+                        {formData.discount_percentage && (
+                          <div>
+                            <span className="text-gray-500">Final price:</span>
+                            <p className="font-bold text-green-600">
+                              {formatPrice(calculateDiscountedPrice())}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <Separator />
+
+                      <div className="space-y-3 text-sm">
+                        {formData.discount_code && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Code:</span>
+                            <span className="font-mono bg-gray-100 px-2 py-1 rounded text-xs">
+                              {formData.discount_code}
+                            </span>
+                          </div>
+                        )}
+
+                        {formData.start_date && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Valid from:</span>
+                            <span className="text-gray-900">
+                              {format(formData.start_date, "MMM d, yyyy")}
+                            </span>
+                          </div>
+                        )}
+
+                        {formData.expiry_date && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Expires:</span>
+                            <span className="text-gray-900">
+                              {format(formData.expiry_date, "MMM d, yyyy")}
+                            </span>
+                          </div>
+                        )}
+
+                        {formData.has_max_claims && formData.max_claims && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Max claims:</span>
+                            <span className="text-gray-900">{formData.max_claims}</span>
+                          </div>
+                        )}
+
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Status:</span>
+                          <span className={formData.is_active ? "text-green-600 font-medium" : "text-gray-600"}>
+                            {formData.is_active ? "Active" : "Inactive"}
+                            {isExpired && (
+                              <span className="text-red-500 block text-xs">
+                                (Expired)
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  )}
+                  </CardContent>
+                </Card>
 
-                  {formData.start_date && (
-                    <div>
-                      <span className="text-gray-500">Valid from: </span>
-                      {format(formData.start_date, "PPP")}
-                    </div>
-                  )}
+                {/* Pricing Breakdown */}
+                {formData.discount_percentage && product && (
+                  <Card className="border-0 shadow-lg bg-white">
+                    <CardHeader>
+                      <CardTitle className="flex items-center text-lg text-gray-900">
+                        <DollarSign className="h-5 w-5 mr-2 text-green-600" />
+                        Pricing Breakdown
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Original Price</span>
+                          <span className="text-gray-900 line-through">
+                            {formatPrice(product.price)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Discount ({formData.discount_percentage}%)</span>
+                          <span className="text-red-600 font-medium">
+                            -{formatPrice((product.price * parseInt(formData.discount_percentage)) / 100)}
+                          </span>
+                        </div>
+                        <Separator />
+                        <div className="flex justify-between">
+                          <span className="text-gray-900 font-semibold">Customer Pays</span>
+                          <span className="text-xl font-bold text-green-600">
+                            {formatPrice(calculateDiscountedPrice())}
+                          </span>
+                        </div>
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                          <p className="text-sm text-green-800">
+                            <strong>Customer saves {formatPrice((product.price * parseInt(formData.discount_percentage)) / 100)}</strong>
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
-                  {formData.expiry_date && (
-                    <div>
-                      <span className="text-gray-500">Expires: </span>
-                      {format(formData.expiry_date, "PPP")}
-                    </div>
-                  )}
-
-                  {formData.has_max_claims && formData.max_claims && (
-                    <div>
-                      <span className="text-gray-500">Limited to: </span>
-                      {formData.max_claims} claims
-                    </div>
-                  )}
-
-                  <div>
-                    <span className="text-gray-500">Status: </span>
-                    <span className={formData.is_active ? "text-green-600" : "text-gray-600"}>
-                      {formData.is_active ? "Active" : "Inactive"}
-                    </span>
-                    {isExpired && (
-                      <span className="text-red-500 block">
-                        (Expired)
-                      </span>
+                {/* Action Buttons */}
+                <div className="space-y-3">
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting || !formData.discount_percentage || !formData.start_date || !formData.expiry_date || !hasChanges()}
+                    className="w-full h-12 bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl transition-all"
+                  >
+                    {isSubmitting ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                        <span>Saving...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Changes
+                      </>
                     )}
-                  </div>
+                  </Button>
+                  
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => router.push(`/offers/${id}`)}
+                    disabled={isSubmitting}
+                    className="w-full h-12 border-gray-200 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </Button>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
+            </div>
+          </div>
+        </form>
+      </ContentContainer>
+    </PageContainer>
   );
 }

@@ -11,7 +11,21 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { AlertCircle, ArrowLeft, Upload, X } from 'lucide-react';
+import { 
+  AlertCircle, 
+  ArrowLeft, 
+  Upload, 
+  X, 
+  Building2,
+  Home,
+  Package,
+  DollarSign,
+  FileText,
+  Image as ImageIcon,
+  Tag,
+  Save,
+  Plus
+} from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Select,
@@ -20,6 +34,121 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+// Page components
+function PageContainer({ children, className = "" }) {
+  return (
+    <div className={`min-h-screen bg-gradient-to-br from-green-50 to-yellow-50 ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function PageHeader({ 
+  title, 
+  subtitle, 
+  backButton = true, 
+  backUrl = null,
+  backLabel = "Back",
+  children 
+}) {
+  const router = useRouter();
+
+  const handleBack = () => {
+    if (backUrl) {
+      router.push(backUrl);
+    } else {
+      router.back();
+    }
+  };
+
+  return (
+    <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Top navigation bar with logo */}
+        <div className="flex items-center justify-between h-16 border-b border-gray-100">
+          <div className="flex items-center space-x-4">
+            <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
+              <Building2 className="h-5 w-5 text-white" />
+            </div>
+            
+            {/* Breadcrumbs */}
+            <nav className="flex items-center space-x-2 text-sm">
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="flex items-center space-x-1 text-gray-500 hover:text-green-600 transition-colors"
+              >
+                <Home className="h-4 w-4" />
+                <span>Dashboard</span>
+              </button>
+              <span className="text-gray-400">/</span>
+              <button
+                onClick={() => router.push('/products')}
+                className="text-gray-500 hover:text-green-600 transition-colors"
+              >
+                Products
+              </button>
+              <span className="text-gray-400">/</span>
+              <span className="text-gray-900 font-medium">Add New</span>
+            </nav>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push('/dashboard')}
+              className="text-gray-600 hover:text-green-600"
+            >
+              <Home className="h-4 w-4 mr-2" />
+              Dashboard
+            </Button>
+          </div>
+        </div>
+
+        {/* Page header */}
+        <div className="py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center space-x-4">
+              {backButton && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleBack}
+                  className="flex-shrink-0 -ml-2 text-gray-600 hover:text-green-600"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  {backLabel}
+                </Button>
+              )}
+              
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+                {subtitle && (
+                  <p className="text-gray-600 mt-1">{subtitle}</p>
+                )}
+              </div>
+            </div>
+
+            {children && (
+              <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row gap-3">
+                {children}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContentContainer({ children, className = "" }) {
+  return (
+    <div className={`max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 ${className}`}>
+      {children}
+    </div>
+  );
+}
 
 function NewProductContent() {
   const router = useRouter();
@@ -71,6 +200,9 @@ function NewProductContent() {
       ...prev,
       [name]: value
     }));
+    
+    // Clear error when user starts typing
+    if (error) setError('');
   };
 
   const handlePriceChange = (e) => {
@@ -92,6 +224,8 @@ function NewProductContent() {
       ...prev,
       price: value
     }));
+    
+    if (error) setError('');
   };
 
   const handleCategoryChange = (categoryId) => {
@@ -243,200 +377,416 @@ function NewProductContent() {
     }
   };
 
+  // Calculate form progress for preview
+  const calculateProgress = () => {
+    let completedFields = 0;
+    const totalFields = 4; // name, price, description, image
+
+    if (formData.name.trim()) completedFields++;
+    if (formData.price && parseFloat(formData.price) > 0) completedFields++;
+    if (formData.description.trim()) completedFields++;
+    if (imageFile || formData.image_url) completedFields++;
+
+    return Math.round((completedFields / totalFields) * 100);
+  };
+
+  const progress = calculateProgress();
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex items-center mb-6">
-        <Button 
-          variant="ghost" 
-          className="mr-2 p-0 h-auto"
-          onClick={() => router.push('/products')}
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <h1 className="text-2xl font-bold">Add New Product</h1>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="Add New Product"
+        subtitle="Create a new product for your business catalog"
+        backUrl="/products"
+        backLabel="Back to Products"
+      />
 
-      {error && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertCircle className="h-4 w-4 mr-2" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      <ContentContainer>
+        {error && (
+          <Alert variant="destructive" className="mb-6 bg-red-50 border-red-200">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-red-800">{error}</AlertDescription>
+          </Alert>
+        )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Product Information</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="name" className="required">Product Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    required
-                    maxLength={200}
-                    className="mt-1"
-                    placeholder="Enter product name"
-                  />
-                </div>
+        <form onSubmit={handleSubmit} className="space-y-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Main Form - Left Side */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Basic Information */}
+              <Card className="border-0 shadow-lg bg-white">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg text-gray-900">
+                    <Package className="h-5 w-5 mr-2 text-green-600" />
+                    Basic Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="name" className="text-gray-700 font-semibold">
+                      Product Name *
+                    </Label>
+                    <Input
+                      id="name"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      required
+                      maxLength={200}
+                      className="mt-2 h-12 bg-gray-50 border-gray-200 focus:border-green-500 focus:ring-green-500"
+                      placeholder="Enter product name"
+                    />
+                  </div>
 
-                <div>
-                  <Label htmlFor="price" className="required">Price ($)</Label>
-                  <Input
-                    id="price"
-                    name="price"
-                    value={formData.price}
-                    onChange={handlePriceChange}
-                    required
-                    className="mt-1"
-                    placeholder="0.00"
-                  />
-                </div>
+                  <div>
+                    <Label htmlFor="price" className="text-gray-700 font-semibold">
+                      Price *
+                    </Label>
+                    <div className="relative mt-2">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                        <DollarSign className="h-4 w-4 text-gray-400" />
+                      </div>
+                      <Input
+                        id="price"
+                        name="price"
+                        value={formData.price}
+                        onChange={handlePriceChange}
+                        required
+                        className="h-12 pl-10 bg-gray-50 border-gray-200 focus:border-green-500 focus:ring-green-500"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
 
-                <div>
-                  <Label htmlFor="category_id">Category</Label>
-                  <Select
-                    value={formData.category_id}
-                    onValueChange={handleCategoryChange}
-                    disabled={isCategoriesLoading}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Select a category (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {isCategoriesLoading ? (
-                        <div className="flex items-center justify-center p-2">
-                          <span className="animate-spin mr-2">⋮</span>
-                          Loading categories...
-                        </div>
-                      ) : categories.length === 0 ? (
-                        <div className="p-2 text-center text-sm text-gray-500">
-                          No categories available
+                  <div>
+                    <Label htmlFor="category_id" className="text-gray-700 font-semibold">
+                      Category (Optional)
+                    </Label>
+                    <Select
+                      value={formData.category_id}
+                      onValueChange={handleCategoryChange}
+                      disabled={isCategoriesLoading}
+                    >
+                      <SelectTrigger className="mt-2 h-12 bg-gray-50 border-gray-200 focus:border-green-500 focus:ring-green-500">
+                        <SelectValue placeholder="Select a category (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {isCategoriesLoading ? (
+                          <div className="flex items-center justify-center p-4">
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-green-600 border-t-transparent mr-2"></div>
+                            Loading categories...
+                          </div>
+                        ) : categories.length === 0 ? (
+                          <div className="p-4 text-center text-sm text-gray-500">
+                            No categories available
+                          </div>
+                        ) : (
+                          categories.map(category => (
+                            <SelectItem key={category.id} value={category.id}>
+                              <div className="flex items-center space-x-2">
+                                <span>{category.icon}</span>
+                                <span>{category.name}</span>
+                              </div>
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Description */}
+              <Card className="border-0 shadow-lg bg-white">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg text-gray-900">
+                    <FileText className="h-5 w-5 mr-2 text-green-600" />
+                    Product Description
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div>
+                    <Label htmlFor="description" className="text-gray-700 font-semibold">
+                      Description (Optional)
+                    </Label>
+                    <Textarea
+                      id="description"
+                      name="description"
+                      value={formData.description}
+                      onChange={handleChange}
+                      className="mt-2 h-32 bg-gray-50 border-gray-200 focus:border-green-500 focus:ring-green-500 resize-none"
+                      placeholder="Describe your product features, benefits, and details..."
+                      maxLength={1000}
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      {formData.description.length}/1000 characters
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Product Image */}
+              <Card className="border-0 shadow-lg bg-white">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg text-gray-900">
+                    <ImageIcon className="h-5 w-5 mr-2 text-green-600" />
+                    Product Image
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label className="text-gray-700 font-semibold">Upload Image</Label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 mt-2 flex flex-col items-center justify-center hover:border-green-400 transition-colors">
+                      {imagePreview ? (
+                        <div className="relative w-full">
+                          <img
+                            src={imagePreview}
+                            alt="Product preview"
+                            className="mx-auto max-h-64 max-w-full object-contain rounded-lg"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="mt-4 mx-auto block border-red-200 text-red-600 hover:bg-red-50"
+                            onClick={removeImage}
+                          >
+                            <X className="h-4 w-4 mr-2" />
+                            Remove Image
+                          </Button>
                         </div>
                       ) : (
-                        categories.map(category => (
-                          <SelectItem key={category.id} value={category.id}>
-                            {category.icon} {category.name}
-                          </SelectItem>
-                        ))
+                        <>
+                          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                            <Upload className="h-8 w-8 text-green-600" />
+                          </div>
+                          <p className="text-gray-700 font-medium mb-2">
+                            Drag and drop or click to upload
+                          </p>
+                          <p className="text-sm text-gray-500 mb-4">
+                            JPEG, PNG, GIF, WEBP up to 5MB
+                          </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => document.getElementById('image-upload').click()}
+                            className="border-green-200 text-green-600 hover:bg-green-50"
+                          >
+                            <Upload className="h-4 w-4 mr-2" />
+                            Select Image
+                          </Button>
+                        </>
                       )}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    name="description"
-                    value={formData.description}
-                    onChange={handleChange}
-                    className="mt-1 h-32"
-                    placeholder="Describe your product"
-                    maxLength={1000}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <Label>Product Image</Label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center">
-                  {imagePreview ? (
-                    <div className="relative w-full">
-                      <img
-                        src={imagePreview}
-                        alt="Product preview"
-                        className="mx-auto max-h-48 max-w-full object-contain rounded"
+                      <input
+                        type="file"
+                        id="image-upload"
+                        accept="image/jpeg, image/png, image/gif, image/webp"
+                        onChange={handleImageChange}
+                        className="hidden"
                       />
+                    </div>
+                    {imageError && (
+                      <Alert variant="destructive" className="mt-2 bg-red-50 border-red-200">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription className="text-red-800">{imageError}</AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="image_url" className="text-gray-700 font-semibold">
+                      Or Image URL (Optional)
+                    </Label>
+                    <Input
+                      id="image_url"
+                      name="image_url"
+                      value={formData.image_url}
+                      onChange={handleChange}
+                      placeholder="https://example.com/image.jpg"
+                      className="mt-2 h-12 bg-gray-50 border-gray-200 focus:border-green-500 focus:ring-green-500"
+                      disabled={!!imageFile}
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Provide a URL or upload an image above
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Preview Panel - Right Side */}
+            <div className="lg:col-span-1">
+              <div className="sticky top-24 space-y-6">
+                {/* Progress Card */}
+                <Card className="border-0 shadow-lg bg-white">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-lg text-gray-900">
+                      <Tag className="h-5 w-5 mr-2 text-green-600" />
+                      Progress
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Completion</span>
+                        <span className="text-sm font-medium text-gray-900">{progress}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">Product Name</span>
+                          <span className={formData.name.trim() ? "text-green-600" : "text-gray-400"}>
+                            {formData.name.trim() ? "✓" : "○"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">Price</span>
+                          <span className={formData.price && parseFloat(formData.price) > 0 ? "text-green-600" : "text-gray-400"}>
+                            {formData.price && parseFloat(formData.price) > 0 ? "✓" : "○"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">Description</span>
+                          <span className={formData.description.trim() ? "text-green-600" : "text-gray-400"}>
+                            {formData.description.trim() ? "✓" : "○"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">Image</span>
+                          <span className={imageFile || formData.image_url ? "text-green-600" : "text-gray-400"}>
+                            {imageFile || formData.image_url ? "✓" : "○"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Product Preview */}
+                <Card className="border-0 shadow-lg bg-white">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-lg text-gray-900">
+                      <Package className="h-5 w-5 mr-2 text-green-600" />
+                      Preview
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {/* Image preview */}
+                      <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+                        {imagePreview ? (
+                          <img
+                            src={imagePreview}
+                            alt="Product preview"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : formData.image_url ? (
+                          <img
+                            src={formData.image_url}
+                            alt="Product preview"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : (
+                          <div className="text-center">
+                            <Package className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+                            <p className="text-sm text-gray-500">No image</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Product details */}
+                      <div className="space-y-3">
+                        <div>
+                          <h3 className="font-semibold text-gray-900">
+                            {formData.name || 'Product Name'}
+                          </h3>
+                          {formData.price && (
+                            <p className="text-xl font-bold text-green-600">
+                              ${parseFloat(formData.price).toFixed(2)}
+                            </p>
+                          )}
+                        </div>
+                        
+                        {formData.description && (
+                          <p className="text-sm text-gray-600 line-clamp-3">
+                            {formData.description}
+                          </p>
+                        )}
+                        
+                        {formData.category_id && (
+                          <div className="flex items-center text-sm text-gray-500">
+                            <Tag className="h-3 w-3 mr-1" />
+                            {categories.find(c => c.id === formData.category_id)?.name || 'Category'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Action Buttons */}
+                <div className="space-y-3">
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting || isUploading || !formData.name.trim() || !formData.price}
+                    className="w-full h-12 bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl transition-all"
+                  >
+                    {isSubmitting || isUploading ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                        <span>{isUploading ? 'Uploading...' : 'Creating...'}</span>
+                      </div>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Create Product
+                      </>
+                    )}
+                  </Button>
+                  
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => router.push('/products')}
+                    disabled={isSubmitting || isUploading}
+                    className="w-full h-12 border-gray-200 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </Button>
+                  
+                  {formData.name.trim() && formData.price && parseFloat(formData.price) > 0 && (
+                    <div className="pt-2 border-t border-gray-100">
                       <Button
                         type="button"
                         variant="outline"
-                        size="sm"
-                        className="mt-4 mx-auto block"
-                        onClick={removeImage}
+                        onClick={() => {
+                          // This would create the product and then redirect to create offer
+                          // For now, just show it's available
+                        }}
+                        disabled={isSubmitting || isUploading}
+                        className="w-full h-10 text-sm border-green-200 text-green-600 hover:bg-green-50"
                       >
-                        <X className="h-4 w-4 mr-2" />
-                        Remove Image
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create & Add Offer
                       </Button>
                     </div>
-                  ) : (
-                    <>
-                      <Upload className="h-12 w-12 text-gray-400 mb-2" />
-                      <p className="text-sm text-gray-500 mb-2">
-                        Drag and drop or click to upload
-                      </p>
-                      <p className="text-xs text-gray-400 mb-4">
-                        JPEG, PNG, GIF, WEBP up to 5MB
-                      </p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => document.getElementById('image-upload').click()}
-                      >
-                        Select Image
-                      </Button>
-                    </>
                   )}
-                  <input
-                    type="file"
-                    id="image-upload"
-                    accept="image/jpeg, image/png, image/gif, image/webp"
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
-                </div>
-                {imageError && (
-                  <p className="text-sm text-red-600 mt-1">{imageError}</p>
-                )}
-                
-                <div>
-                  <Label htmlFor="image_url">Or Image URL (Optional)</Label>
-                  <Input
-                    id="image_url"
-                    name="image_url"
-                    value={formData.image_url}
-                    onChange={handleChange}
-                    placeholder="https://example.com/image.jpg"
-                    className="mt-1"
-                    disabled={!!imageFile}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Provide a URL or upload an image above
-                  </p>
                 </div>
               </div>
             </div>
-
-            <div className="flex justify-end space-x-3 pt-4 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.push('/products')}
-                disabled={isSubmitting || isUploading}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={isSubmitting || isUploading}
-              >
-                {(isSubmitting || isUploading) ? (
-                  <>
-                    <span className="animate-spin mr-2">⋮</span>
-                    {isUploading ? 'Uploading...' : 'Creating...'}
-                  </>
-                ) : 'Create Product'}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+          </div>
+        </form>
+      </ContentContainer>
+    </PageContainer>
   );
 }
 
