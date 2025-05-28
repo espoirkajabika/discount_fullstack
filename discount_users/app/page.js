@@ -1,136 +1,154 @@
 // app/page.js
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { colors } from '@/lib/colors'
-import { textStyles, layoutStyles } from '@/lib/styles'
+import { brandColors } from '@/lib/colors'
 
 export default function Home() {
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: colors.gray[50] }}>
-      {/* Hero Section */}
-      <section style={{ ...layoutStyles.section, backgroundColor: colors.white }}>
-        <div style={layoutStyles.container}>
-          <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-            <h1 style={{ 
-              ...textStyles.gradient,
-              fontSize: '4rem',
-              marginBottom: '16px',
-              lineHeight: '1.1'
-            }}>
-              Discount Deals
-            </h1>
-            <p style={{ 
-              ...textStyles.body,
-              fontSize: '1.25rem',
-              maxWidth: '600px',
-              margin: '0 auto'
-            }}>
-              Discover amazing deals and offers from local businesses
+    <div style={{ 
+      minHeight: '100vh', 
+      backgroundColor: brandColors.gray[50],
+      padding: '32px 16px'
+    }}>
+      <div style={{ 
+        maxWidth: '800px', 
+        margin: '0 auto',
+        textAlign: 'center'
+      }}>
+        <h1 style={{ 
+          fontSize: '3rem', 
+          fontWeight: 'bold',
+          background: `linear-gradient(135deg, ${brandColors.deepRed} 0%, ${brandColors.orange} 100%)`,
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          marginBottom: '24px'
+        }}>
+          Discount Deals
+        </h1>
+        
+        <p style={{ 
+          fontSize: '1.25rem',
+          color: brandColors.gray[600],
+          marginBottom: '48px'
+        }}>
+          Your design system is working perfectly!
+        </p>
+        
+        <div style={{ 
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '24px',
+          marginBottom: '48px'
+        }}>
+          <div style={{ 
+            padding: '24px',
+            backgroundColor: brandColors.deepRed,
+            color: brandColors.white,
+            borderRadius: '12px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+          }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '8px' }}>
+              Deep Red
+            </h3>
+            <p style={{ fontSize: '0.875rem', opacity: '0.9' }}>
+              #8E0D3C
             </p>
           </div>
           
-          <div style={{ ...layoutStyles.flexCenter, gap: '16px', flexWrap: 'wrap' }}>
-            <Button variant="primary" size="lg">
-              Browse Offers
-            </Button>
-            <Button variant="outline" size="lg">
-              Sign Up Free
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Color Showcase */}
-      <section style={layoutStyles.section}>
-        <div style={layoutStyles.container}>
-          <h2 style={{ 
-            ...textStyles.heading,
-            fontSize: '2rem',
-            textAlign: 'center',
-            marginBottom: '32px'
+          <div style={{ 
+            padding: '24px',
+            backgroundColor: brandColors.blackcurrant,
+            color: brandColors.white,
+            borderRadius: '12px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
           }}>
-            Our Brand Colors
-          </h2>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '8px' }}>
+              Blackcurrant
+            </h3>
+            <p style={{ fontSize: '0.875rem', opacity: '0.9' }}>
+              #1D1842
+            </p>
+          </div>
           
           <div style={{ 
-            ...layoutStyles.grid,
-            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-            gap: '24px'
+            padding: '24px',
+            backgroundColor: brandColors.orange,
+            color: brandColors.white,
+            borderRadius: '12px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
           }}>
-            <Card>
-              <div style={{ 
-                height: '100px',
-                backgroundColor: colors.deepRed,
-                borderRadius: '8px',
-                marginBottom: '16px'
-              }} />
-              <h3 style={textStyles.subheading}>Deep Red</h3>
-              <p style={textStyles.body}>#8E0D3C - Primary brand color</p>
-            </Card>
-            
-            <Card>
-              <div style={{ 
-                height: '100px',
-                backgroundColor: colors.blackcurrant,
-                borderRadius: '8px',
-                marginBottom: '16px'
-              }} />
-              <h3 style={textStyles.subheading}>Blackcurrant</h3>
-              <p style={textStyles.body}>#1D1842 - Dark sections</p>
-            </Card>
-            
-            <Card>
-              <div style={{ 
-                height: '100px',
-                backgroundColor: colors.orange,
-                borderRadius: '8px',
-                marginBottom: '16px'
-              }} />
-              <h3 style={textStyles.subheading}>Orange</h3>
-              <p style={textStyles.body}>#EF3B33 - Accent color</p>
-            </Card>
-            
-            <Card>
-              <div style={{ 
-                height: '100px',
-                backgroundColor: colors.rosePink,
-                borderRadius: '8px',
-                marginBottom: '16px'
-              }} />
-              <h3 style={textStyles.subheading}>Rose Pink</h3>
-              <p style={textStyles.body}>#FDA1A2 - Light accents</p>
-            </Card>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '8px' }}>
+              Orange
+            </h3>
+            <p style={{ fontSize: '0.875rem', opacity: '0.9' }}>
+              #EF3B33
+            </p>
           </div>
-        </div>
-      </section>
-
-      {/* Button Showcase */}
-      <section style={{ ...layoutStyles.section, backgroundColor: colors.white }}>
-        <div style={layoutStyles.container}>
-          <h2 style={{ 
-            ...textStyles.heading,
-            fontSize: '2rem',
-            textAlign: 'center',
-            marginBottom: '32px'
-          }}>
-            Button Variations
-          </h2>
           
           <div style={{ 
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '16px',
-            justifyContent: 'center'
+            padding: '24px',
+            backgroundColor: brandColors.rosePink,
+            color: brandColors.blackcurrant,
+            borderRadius: '12px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
           }}>
-            <Button variant="primary">Primary Button</Button>
-            <Button variant="secondary">Secondary Button</Button>
-            <Button variant="accent">Accent Button</Button>
-            <Button variant="outline">Outline Button</Button>
-            <Button variant="ghost">Ghost Button</Button>
-            <Button variant="gradient">Gradient Button</Button>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '8px' }}>
+              Rose Pink
+            </h3>
+            <p style={{ fontSize: '0.875rem', opacity: '0.9' }}>
+              #FDA1A2
+            </p>
           </div>
         </div>
-      </section>
+        
+        <div style={{ 
+          display: 'flex',
+          gap: '16px',
+          justifyContent: 'center',
+          flexWrap: 'wrap'
+        }}>
+          <button style={{
+            padding: '12px 24px',
+            backgroundColor: brandColors.deepRed,
+            color: brandColors.white,
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '16px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}>
+            Primary Button
+          </button>
+          
+          <button style={{
+            padding: '12px 24px',
+            backgroundColor: brandColors.orange,
+            color: brandColors.white,
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '16px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}>
+            Accent Button
+          </button>
+          
+          <button style={{
+            padding: '12px 24px',
+            backgroundColor: 'transparent',
+            color: brandColors.deepRed,
+            border: `2px solid ${brandColors.deepRed}`,
+            borderRadius: '8px',
+            fontSize: '16px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}>
+            Outline Button
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
