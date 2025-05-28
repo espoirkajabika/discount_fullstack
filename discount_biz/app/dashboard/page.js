@@ -5,221 +5,22 @@ import { BusinessRoute } from '@/components/ProtectedRoute';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import {
-  User,
-  Building,
-  ShoppingBag,
-  Tag,
-  LogOut,
-  Plus,
-  ArrowRight,
-  TrendingUp,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  RefreshCw,
-  Store,
-  Briefcase
-} from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarInitials } from '@/components/ui/avatar';
+import { User, Building2, ShoppingBag, Tag, LogOut, Plus, ArrowRight, BarChart3, Users, TrendingUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
-import { dashboardApi } from '@/lib/dashboard';
-
-// Simple loading component
-const SimpleLoading = () => (
-  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-    <div className="text-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#FF7139] mx-auto mb-4"></div>
-      <p className="text-gray-600">Loading your dashboard...</p>
-    </div>
-  </div>
-);
-
-// Business Registration Prompt
-const BusinessRegistrationPrompt = ({ user, onRegister }) => (
-  <div className="min-h-screen bg-gray-50">
-    <header className="bg-white shadow-sm border-b">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <div className="flex items-center">
-            <Building className="h-8 w-8 text-[#FF7139] mr-3" />
-            <h1 className="text-xl font-semibold text-gray-900">Business Dashboard</h1>
-          </div>
-          <div className="flex items-center space-x-2">
-            <User className="h-5 w-5 text-gray-400" />
-            <span className="text-sm text-gray-700">
-              {user?.first_name} {user?.last_name}
-            </span>
-            <Badge variant="outline">Regular User</Badge>
-          </div>
-        </div>
-      </div>
-    </header>
-
-    <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <Card className="border-2 border-[#FF7139] bg-gradient-to-br from-orange-50 to-white">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 w-16 h-16 bg-[#FF7139] rounded-full flex items-center justify-center">
-            <Store className="h-8 w-8 text-white" />
-          </div>
-          <CardTitle className="text-2xl text-gray-900">Welcome to Business Dashboard!</CardTitle>
-          <CardDescription className="text-lg">
-            To access business features, you need to register your business first.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-center space-y-6">
-          <div className="bg-white p-6 rounded-lg border border-gray-100">
-            <h3 className="font-semibold text-gray-900 mb-3">What you'll get:</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div className="flex items-center justify-center space-x-2">
-                <ShoppingBag className="h-4 w-4 text-[#FF7139]" />
-                <span>Product Management</span>
-              </div>
-              <div className="flex items-center justify-center space-x-2">
-                <Tag className="h-4 w-4 text-[#FF7139]" />
-                <span>Create Offers & Deals</span>
-              </div>
-              <div className="flex items-center justify-center space-x-2">
-                <TrendingUp className="h-4 w-4 text-[#FF7139]" />
-                <span>Customer Analytics</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <Button
-              size="lg"
-              className="w-full bg-[#FF7139] hover:bg-[#e6632e]"
-              onClick={onRegister}
-            >
-              <Briefcase className="h-5 w-5 mr-2" />
-              Register My Business
-            </Button>
-            <p className="text-xs text-gray-500">
-              Currently logged in as: {user?.first_name} {user?.last_name} ({user?.email})
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    </main>
-  </div>
-);
 
 function DashboardContent() {
   const { user, logout } = useAuth();
   const router = useRouter();
 
-  // Simple state management
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [dashboardData, setDashboardData] = useState({
-    stats: {
-      totalProducts: 0,
-      totalOffers: 0,
-      totalClaims: 0,
-      activeOffers: 0,
-      business: null,
-      needsBusinessRegistration: false,
-      user: null
-    },
-    profileStatus: {
-      isComplete: false,
-      completionPercentage: 0,
-      missingFields: [],
-      business: null,
-      needsBusinessRegistration: false
-    },
-    recentActivity: {
-      recentProducts: [],
-      recentOffers: []
-    }
-  });
-
-  // Safe data fetching
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      console.log('Fetching dashboard data...');
-
-      // Fetch all data safely
-      const [statsResult, profileResult, activityResult] = await Promise.allSettled([
-        dashboardApi.getStats(),
-        dashboardApi.getProfileStatus(),
-        dashboardApi.getRecentActivity()
-      ]);
-
-      // Process results safely
-      const stats = statsResult.status === 'fulfilled' ? statsResult.value : {
-        totalProducts: 0,
-        totalOffers: 0,
-        totalClaims: 0,
-        activeOffers: 0,
-        business: null,
-        needsBusinessRegistration: true,
-        user: null
-      };
-
-      const profileStatus = profileResult.status === 'fulfilled' ? profileResult.value : {
-        isComplete: false,
-        completionPercentage: 0,
-        missingFields: ['Unable to load profile'],
-        business: null,
-        needsBusinessRegistration: true
-      };
-
-      const recentActivity = activityResult.status === 'fulfilled' ? activityResult.value : {
-        recentProducts: [],
-        recentOffers: []
-      };
-
-      setDashboardData({
-        stats,
-        profileStatus,
-        recentActivity
-      });
-
-      // Check for auth errors
-      if (stats.authError) {
-        setError('Please log in again to access your dashboard');
-      }
-
-      console.log('Dashboard data loaded:', { stats, profileStatus, recentActivity });
-
-    } catch (err) {
-      console.error('Error fetching dashboard data:', err);
-      setError('Failed to load dashboard data. Please try refreshing the page.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (user) {
-      fetchDashboardData();
-    }
-  }, [user]);
-
-  // Event handlers
+  // Handle logout
   const handleLogout = async () => {
-    try {
-      await logout();
-      router.push('/auth/login');
-    } catch (err) {
-      console.error('Logout error:', err);
-    }
+    await logout();
+    router.push('/auth/login');
   };
 
-  const handleBusinessRegistration = () => {
-    alert('Business registration feature coming soon! This will allow you to set up your business profile and start creating offers.');
-  };
-
-  const handleCreateProduct = () => {
-    router.push('/products/new');
-  };
-
+  // Navigation handlers
   const handleCreateOffer = () => {
     router.push('/offers/new');
   };
@@ -232,62 +33,52 @@ function DashboardContent() {
     router.push('/offers');
   };
 
-  // Show loading state
-  if (loading) {
-    return <SimpleLoading />;
-  }
+  const handleCreateProduct = () => {
+    router.push('/products/new');
+  };
 
-  // Show business registration for non-business users
-  if (dashboardData.stats.needsBusinessRegistration || dashboardData.profileStatus.needsBusinessRegistration) {
-    return (
-      <BusinessRegistrationPrompt
-        user={dashboardData.stats.user || user}
-        onRegister={handleBusinessRegistration}
-      />
-    );
-  }
-
-  // Main dashboard for business users
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-yellow-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <Building className="h-8 w-8 text-[#FF7139] mr-3" />
-              <h1 className="text-xl font-semibold text-gray-900">Business Dashboard</h1>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={fetchDashboardData}
-                className="flex items-center space-x-2"
-              >
-                <RefreshCw className="h-4 w-4" />
-                <span>Refresh</span>
-              </Button>
-
-              <div className="flex items-center space-x-2">
-                <User className="h-5 w-5 text-gray-400" />
-                <span className="text-sm text-gray-700">
-                  {user?.first_name} {user?.last_name}
-                </span>
-                <Badge variant="secondary" className="bg-[#FF7139] text-white">
-                  Business
-                </Badge>
+              <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center mr-3">
+                <Building2 className="h-6 w-6 text-white" />
               </div>
-
-              <Button
-                variant="outline"
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Discount Business</h1>
+                <p className="text-xs text-gray-500">Dashboard</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-3 bg-gray-50 rounded-lg px-3 py-2">
+                <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                  <User className="h-4 w-4 text-white" />
+                </div>
+                <div className="hidden sm:block">
+                  <p className="text-sm font-medium text-gray-900">
+                    {user?.first_name} {user?.last_name}
+                  </p>
+                  <p className="text-xs text-gray-500">{user?.email}</p>
+                </div>
+                {user?.is_business && (
+                  <Badge className="bg-green-100 text-green-800 border-green-200">
+                    Business
+                  </Badge>
+                )}
+              </div>
+              
+              <Button 
+                variant="outline" 
                 size="sm"
                 onClick={handleLogout}
-                className="flex items-center space-x-2"
+                className="flex items-center space-x-2 border-gray-200 hover:bg-gray-50"
               >
                 <LogOut className="h-4 w-4" />
-                <span>Logout</span>
+                <span className="hidden sm:inline">Logout</span>
               </Button>
             </div>
           </div>
@@ -298,364 +89,343 @@ function DashboardContent() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Welcome back, {user?.first_name || 'Business Owner'}!
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome back, {user?.first_name || 'Business Owner'}! 👋
           </h2>
-          <p className="text-gray-600">
-            {dashboardData.stats.business?.business_name ?
-              `Manage ${dashboardData.stats.business.business_name} from your dashboard.` :
-              'Complete your business setup to start managing offers.'
-            }
+          <p className="text-gray-600 text-lg">
+            Here's what's happening with your business today.
           </p>
         </div>
 
-        {/* Error Alert */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
-                <p className="text-red-700">{error}</p>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={fetchDashboardData}
-                className="text-red-600 hover:text-red-700"
-              >
-                <RefreshCw className="h-4 w-4 mr-1" />
-                Retry
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={handleManageProducts}>
+        {/* Quick Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card 
+            className="cursor-pointer hover:shadow-lg transition-all duration-200 border-0 bg-white"
+            onClick={handleManageProducts}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Products</CardTitle>
-              <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium text-gray-600">Total Products</CardTitle>
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                <ShoppingBag className="h-4 w-4 text-blue-600" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#FF7139]">
-                {dashboardData.stats.totalProducts || 0}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {dashboardData.stats.totalProducts === 0 ? 'Add your first product' : 'Click to manage products'}
+              <div className="text-2xl font-bold text-gray-900">0</div>
+              <p className="text-xs text-gray-500 flex items-center mt-1">
+                <ArrowRight className="h-3 w-3 mr-1" />
+                Click to manage products
               </p>
             </CardContent>
           </Card>
 
-          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={handleManageOffers}>
+          <Card 
+            className="cursor-pointer hover:shadow-lg transition-all duration-200 border-0 bg-white"
+            onClick={handleManageOffers}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Offers</CardTitle>
-              <Tag className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium text-gray-600">Active Offers</CardTitle>
+              <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                <Tag className="h-4 w-4 text-green-600" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {dashboardData.stats.activeOffers || 0}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {(dashboardData.stats.totalOffers || 0) > (dashboardData.stats.activeOffers || 0) &&
-                  `${(dashboardData.stats.totalOffers || 0) - (dashboardData.stats.activeOffers || 0)} inactive • `
-                }
-                {(dashboardData.stats.totalOffers || 0) === 0 ? 'Create your first offer' : 'Click to manage'}
+              <div className="text-2xl font-bold text-gray-900">0</div>
+              <p className="text-xs text-gray-500 flex items-center mt-1">
+                <ArrowRight className="h-3 w-3 mr-1" />
+                Click to manage offers
               </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-0 bg-white">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Claims</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium text-gray-600">Total Claims</CardTitle>
+              <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
+                <Users className="h-4 w-4 text-yellow-600" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">
-                {dashboardData.stats.totalClaims || 0}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {(dashboardData.stats.totalClaims || 0) === 0 ? 'No claims yet' : 'Customer offer claims'}
-              </p>
+              <div className="text-2xl font-bold text-gray-900">0</div>
+              <p className="text-xs text-gray-500 mt-1">No claims yet</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-0 bg-white">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Profile Status</CardTitle>
-              {dashboardData.profileStatus.isComplete ?
-                <CheckCircle className="h-4 w-4 text-green-600" /> :
-                <Clock className="h-4 w-4 text-orange-600" />
-              }
+              <CardTitle className="text-sm font-medium text-gray-600">Profile Status</CardTitle>
+              <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                <Building2 className="h-4 w-4 text-orange-600" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${dashboardData.profileStatus.isComplete ? 'text-green-600' : 'text-orange-600'
-                }`}>
-                {dashboardData.profileStatus.completionPercentage || 0}%
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {dashboardData.profileStatus.isComplete ? 'Profile complete' :
-                  `${(dashboardData.profileStatus.missingFields || []).length} field(s) remaining`}
-              </p>
+              <div className="text-2xl font-bold text-orange-600">Incomplete</div>
+              <p className="text-xs text-gray-500 mt-1">Setup business profile</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Quick Actions */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Get started with your business</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Button
-                onClick={handleCreateProduct}
-                className="bg-[#FF7139] hover:bg-[#e6632e] h-auto p-4 justify-start"
-              >
-                <div className="flex items-center space-x-3">
-                  <Plus className="h-5 w-5" />
-                  <div className="text-left">
-                    <p className="font-medium">Add Product</p>
-                    <p className="text-xs opacity-90">Build your product catalog</p>
-                  </div>
-                </div>
-              </Button>
-
-              <Button
-                onClick={handleCreateOffer}
-                disabled={(dashboardData.stats.totalProducts || 0) === 0}
-                variant="outline"
-                className="h-auto p-4 justify-start"
-              >
-                <div className="flex items-center space-x-3">
-                  <Tag className="h-5 w-5" />
-                  <div className="text-left">
-                    <p className="font-medium">Create Offer</p>
-                    <p className="text-xs text-gray-500">
-                      {(dashboardData.stats.totalProducts || 0) === 0 ? 'Add products first' : 'Start attracting customers'}
-                    </p>
-                  </div>
-                </div>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Recent Activity */}
-        {((dashboardData.recentActivity.recentProducts || []).length > 0 ||
-          (dashboardData.recentActivity.recentOffers || []).length > 0) && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              {(dashboardData.recentActivity.recentProducts || []).length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <ShoppingBag className="h-5 w-5 mr-2 text-[#FF7139]" />
-                      Recent Products
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {(dashboardData.recentActivity.recentProducts || []).slice(0, 3).map((product, index) => (
-                        <div key={product.id || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div className="flex-1">
-                            <p className="font-medium text-sm">{product.name || 'Unknown Product'}</p>
-                            <p className="text-xs text-gray-500">
-                              ${product.price || '0.00'} • {product.created_at ? new Date(product.created_at).toLocaleDateString() : 'Recently added'}
-                            </p>
-                          </div>
-                          <Badge variant={product.is_active ? "default" : "secondary"}>
-                            {product.is_active ? "Active" : "Inactive"}
-                          </Badge>
-                        </div>
-                      ))}
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Next Steps */}
+          <div className="lg:col-span-2">
+            <Card className="border-0 bg-white shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-xl text-gray-900">Get Started</CardTitle>
+                <CardDescription className="text-gray-600">
+                  Complete these steps to get your business up and running
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  <div className="flex items-start space-x-4 p-4 bg-green-50 rounded-lg border border-green-100">
+                    <div className="w-10 h-10 rounded-full bg-green-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                      1
                     </div>
-                    <Link href="/products">
-                      <Button variant="ghost" size="sm" className="w-full mt-3">
-                        View All Products <ArrowRight className="h-4 w-4 ml-2" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 mb-1">Complete Business Profile</h3>
+                      <p className="text-sm text-gray-600 mb-3">Add your business details, category, and contact information to build trust with customers.</p>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        disabled
+                        className="border-gray-300 text-gray-500"
+                      >
+                        Coming Soon
                       </Button>
-                    </Link>
-                  </CardContent>
-                </Card>
-              )}
-
-              {(dashboardData.recentActivity.recentOffers || []).length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Tag className="h-5 w-5 mr-2 text-[#FF7139]" />
-                      Recent Offers
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {(dashboardData.recentActivity.recentOffers || []).slice(0, 3).map((offer, index) => (
-                        <div key={offer.id || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div className="flex-1">
-                            <p className="font-medium text-sm">{offer.title || 'Unknown Offer'}</p>
-                            <p className="text-xs text-gray-500">
-                              {offer.discount_value || 0}% off • {offer.current_claims || 0} claims
-                            </p>
-                          </div>
-                          <Badge variant={offer.is_active ? "default" : "secondary"}>
-                            {offer.is_active ? "Active" : "Inactive"}
-                          </Badge>
-                        </div>
-                      ))}
                     </div>
-                    <Link href="/offers">
-                      <Button variant="ghost" size="sm" className="w-full mt-3">
-                        View All Offers <ArrowRight className="h-4 w-4 ml-2" />
+                  </div>
+
+                  <div className="flex items-start space-x-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                    <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                      2
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 mb-1">Add Your First Product</h3>
+                      <p className="text-sm text-gray-600 mb-3">Create a product catalog so customers know what you offer.</p>
+                      <Button 
+                        size="sm" 
+                        onClick={handleCreateProduct}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Product
                       </Button>
-                    </Link>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
-
-        {/* No Data State */}
-        {(dashboardData.stats.totalProducts || 0) === 0 && (dashboardData.stats.totalOffers || 0) === 0 && !loading && (
-          <Card className="text-center py-12">
-            <CardContent>
-              <Building className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Ready to get started?</h3>
-              <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                Your business dashboard is ready! Start by adding your first product, then create offers to attract customers.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Button
-                  onClick={handleCreateProduct}
-                  className="bg-[#FF7139] hover:bg-[#e6632e]"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Your First Product
-                </Button>
-                <Button variant="outline" disabled>
-                  <Building className="h-4 w-4 mr-2" />
-                  Complete Business Profile
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Quick Links */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Links</CardTitle>
-            <CardDescription>Access key areas of your business dashboard</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Link href="/products">
-                <Button variant="outline" className="w-full justify-start h-auto p-4 hover:bg-gray-50">
-                  <div className="flex items-center space-x-3 w-full">
-                    <ShoppingBag className="h-5 w-5 text-[#FF7139]" />
-                    <div className="text-left flex-1">
-                      <p className="font-medium">Products</p>
-                      <p className="text-xs text-gray-500">{dashboardData.stats.totalProducts || 0} products</p>
                     </div>
-                    <ArrowRight className="h-4 w-4 text-gray-400" />
                   </div>
-                </Button>
-              </Link>
 
-              <Link href="/offers">
-                <Button variant="outline" className="w-full justify-start h-auto p-4 hover:bg-gray-50">
-                  <div className="flex items-center space-x-3 w-full">
-                    <Tag className="h-5 w-5 text-[#FF7139]" />
-                    <div className="text-left flex-1">
-                      <p className="font-medium">Offers</p>
-                      <p className="text-xs text-gray-500">{dashboardData.stats.activeOffers || 0} active offers</p>
+                  <div className="flex items-start space-x-4 p-4 bg-yellow-50 rounded-lg border border-yellow-100">
+                    <div className="w-10 h-10 rounded-full bg-yellow-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                      3
                     </div>
-                    <ArrowRight className="h-4 w-4 text-gray-400" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 mb-1">Create Your First Offer</h3>
+                      <p className="text-sm text-gray-600 mb-3">Start attracting customers with special deals and discounts.</p>
+                      <Button 
+                        size="sm" 
+                        onClick={handleCreateOffer}
+                        className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                      >
+                        <Tag className="h-4 w-4 mr-2" />
+                        Create Offer
+                      </Button>
+                    </div>
                   </div>
-                </Button>
-              </Link>
-
-              <Button
-                variant="outline"
-                className="w-full justify-start h-auto p-4 opacity-60 cursor-not-allowed"
-                disabled
-              >
-                <div className="flex items-center space-x-3 w-full">
-                  <Building className="h-5 w-5 text-gray-400" />
-                  <div className="text-left flex-1">
-                    <p className="font-medium text-gray-400">Business Profile</p>
-                    <p className="text-xs text-gray-400">{dashboardData.profileStatus.completionPercentage || 0}% complete</p>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-gray-400" />
                 </div>
-              </Button>
+              </CardContent>
+            </Card>
+          </div>
 
-              <Button
-                variant="outline"
-                className="w-full justify-start h-auto p-4 opacity-60 cursor-not-allowed"
-                disabled
-              >
-                <div className="flex items-center space-x-3 w-full">
-                  <TrendingUp className="h-5 w-5 text-gray-400" />
-                  <div className="text-left flex-1">
-                    <p className="font-medium text-gray-400">Analytics</p>
-                    <p className="text-xs text-gray-400">{dashboardData.stats.totalClaims || 0} total claims</p>
+          {/* Right Column - Account Info & Quick Actions */}
+          <div className="space-y-6">
+            {/* Account Information */}
+            <Card className="border-0 bg-white shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-lg text-gray-900 flex items-center">
+                  <User className="h-5 w-5 mr-2 text-green-600" />
+                  Account Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
+                      <User className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        {user?.first_name} {user?.last_name}
+                      </p>
+                      <p className="text-sm text-gray-500">{user?.email}</p>
+                      {user?.phone && (
+                        <p className="text-sm text-gray-500">{user?.phone}</p>
+                      )}
+                    </div>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-gray-400" />
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {user?.is_business && (
+                      <Badge className="bg-green-100 text-green-800 border-green-200">
+                        Business User
+                      </Badge>
+                    )}
+                    {user?.is_admin && (
+                      <Badge className="bg-red-100 text-red-800 border-red-200">
+                        Admin
+                      </Badge>
+                    )}
+                    {user?.is_active && (
+                      <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                        Active
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
-        {/* Performance Summary */}
-        {(dashboardData.stats.totalOffers || 0) > 0 && (
-          <Card className="mt-8">
+            {/* Quick Actions */}
+            <Card className="border-0 bg-white shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-lg text-gray-900">Quick Actions</CardTitle>
+                <CardDescription>
+                  Jump to key areas of your dashboard
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <Button 
+                    className="w-full justify-start h-12 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={handleCreateOffer}
+                  >
+                    <Tag className="h-5 w-5 mr-3" />
+                    <div className="text-left">
+                      <p className="font-medium">Create New Offer</p>
+                      <p className="text-xs opacity-90">Start attracting customers</p>
+                    </div>
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start h-12 border-gray-200 hover:bg-gray-50"
+                    onClick={handleManageProducts}
+                  >
+                    <ShoppingBag className="h-5 w-5 mr-3 text-blue-600" />
+                    <div className="text-left">
+                      <p className="font-medium">Manage Products</p>
+                      <p className="text-xs text-gray-500">View and edit catalog</p>
+                    </div>
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start h-12 border-gray-200 hover:bg-gray-50"
+                    onClick={handleManageOffers}
+                  >
+                    <Tag className="h-5 w-5 mr-3 text-yellow-600" />
+                    <div className="text-left">
+                      <p className="font-medium">View All Offers</p>
+                      <p className="text-xs text-gray-500">Manage existing deals</p>
+                    </div>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Coming Soon */}
+            <Card className="border-0 bg-gradient-to-br from-gray-50 to-gray-100">
+              <CardHeader>
+                <CardTitle className="text-lg text-gray-700">Coming Soon</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-3 text-gray-500">
+                    <BarChart3 className="h-5 w-5" />
+                    <span className="text-sm">Analytics Dashboard</span>
+                  </div>
+                  <div className="flex items-center space-x-3 text-gray-500">
+                    <Building2 className="h-5 w-5" />
+                    <span className="text-sm">Business Profile Setup</span>
+                  </div>
+                  <div className="flex items-center space-x-3 text-gray-500">
+                    <TrendingUp className="h-5 w-5" />
+                    <span className="text-sm">Performance Reports</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Bottom Section - Quick Links */}
+        <div className="mt-12">
+          <Card className="border-0 bg-white shadow-lg">
             <CardHeader>
-              <CardTitle className="flex items-center">
-                <TrendingUp className="h-5 w-5 mr-2 text-[#FF7139]" />
-                Performance Summary
-              </CardTitle>
+              <CardTitle className="text-xl text-gray-900">Quick Navigation</CardTitle>
+              <CardDescription>
+                Access all areas of your business dashboard
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{dashboardData.stats.totalClaims || 0}</div>
-                  <p className="text-sm text-gray-600">Total Claims</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {(dashboardData.stats.totalOffers || 0) > 0 ?
-                      `Avg ${((dashboardData.stats.totalClaims || 0) / (dashboardData.stats.totalOffers || 1)).toFixed(1)} per offer` :
-                      'No offers yet'
-                    }
-                  </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Link href="/products" className="group">
+                  <div className="p-4 rounded-lg border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all duration-200">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <div className="w-10 h-10 bg-blue-100 group-hover:bg-blue-200 rounded-lg flex items-center justify-center transition-colors">
+                        <ShoppingBag className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">Products</p>
+                        <p className="text-xs text-gray-500">Manage catalog</p>
+                      </div>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-green-600 transition-colors" />
+                  </div>
+                </Link>
+
+                <Link href="/offers" className="group">
+                  <div className="p-4 rounded-lg border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all duration-200">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <div className="w-10 h-10 bg-yellow-100 group-hover:bg-yellow-200 rounded-lg flex items-center justify-center transition-colors">
+                        <Tag className="h-5 w-5 text-yellow-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">Offers</p>
+                        <p className="text-xs text-gray-500">Create & manage deals</p>
+                      </div>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-green-600 transition-colors" />
+                  </div>
+                </Link>
+
+                <div className="p-4 rounded-lg border border-gray-200 bg-gray-50 opacity-60">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
+                      <Building2 className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-400">Business Profile</p>
+                      <p className="text-xs text-gray-400">Setup your business</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400">Coming Soon</p>
                 </div>
 
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">
-                    {(dashboardData.stats.totalOffers || 0) > 0 ?
-                      `${Math.round(((dashboardData.stats.activeOffers || 0) / (dashboardData.stats.totalOffers || 1)) * 100)}%` :
-                      '0%'
-                    }
+                <div className="p-4 rounded-lg border border-gray-200 bg-gray-50 opacity-60">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
+                      <BarChart3 className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-400">Analytics</p>
+                      <p className="text-xs text-gray-400">Performance metrics</p>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-600">Active Rate</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {dashboardData.stats.activeOffers || 0} of {dashboardData.stats.totalOffers || 0} offers
-                  </p>
-                </div>
-
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">
-                    {dashboardData.profileStatus.completionPercentage || 0}%
-                  </div>
-                  <p className="text-sm text-gray-600">Setup Complete</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {dashboardData.profileStatus.isComplete ? 'All set!' :
-                      `${(dashboardData.profileStatus.missingFields || []).length} fields remaining`}
-                  </p>
+                  <p className="text-xs text-gray-400">Coming Soon</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-        )}
+        </div>
       </main>
     </div>
   );
