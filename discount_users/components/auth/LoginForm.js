@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { brandColors } from '@/lib/colors'
 import { textStyles } from '@/lib/typography'
-import Spinner from '@/components/ui/spinner'
 
 export default function LoginForm() {
   const [formData, setFormData] = useState({
