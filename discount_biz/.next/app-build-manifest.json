@@ -21,20 +21,25 @@
       "static/chunks/main-app.js",
       "static/chunks/app/auth/login/page.js"
     ],
-    "/products/new/page": [
+    "/offers/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/products/new/page.js"
+      "static/chunks/app/offers/page.js"
+    ],
+    "/offers/new/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/offers/new/page.js"
     ],
     "/products/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/products/page.js"
     ],
-    "/offers/page": [
+    "/products/new/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/offers/page.js"
+      "static/chunks/app/products/new/page.js"
     ],
     "/products/[id]/page": [
       "static/chunks/webpack.js",
@@ -45,21 +50,6 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/offers/[id]/page.js"
-    ],
-    "/offers/new/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/offers/new/page.js"
-    ],
-    "/products/[id]/edit/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/products/[id]/edit/page.js"
-    ],
-    "/offers/[id]/edit/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/offers/[id]/edit/page.js"
     ]
   }
 }

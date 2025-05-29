@@ -1,4 +1,4 @@
-// components/offers/OfferCard.js
+// components/offers/OfferCard.js - Updated with smaller size and fixed images
 'use client'
 import { useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
@@ -95,19 +95,30 @@ export default function OfferCard({
   const isExpired = timeRemaining === 'Expired'
   const isSoldOut = availability === 'Sold out'
 
+  // Get the product image URL - handle different API response structures
+  const getImageUrl = () => {
+    if (offer.product?.image_url) return offer.product.image_url
+    if (offer.products?.image_url) return offer.products.image_url
+    if (offer.image_url) return offer.image_url
+    return null
+  }
+
+  const imageUrl = getImageUrl()
+
   return (
     <div
       style={{
         backgroundColor: brandColors.white,
         borderRadius: '12px',
         overflow: 'hidden',
-        boxShadow: isHovered ? '0 8px 25px rgba(0,0,0,0.15)' : '0 4px 6px rgba(0,0,0,0.1)',
+        boxShadow: isHovered ? '0 6px 20px rgba(0,0,0,0.12)' : '0 2px 8px rgba(0,0,0,0.08)',
         transition: 'all 0.3s ease',
-        transform: isHovered ? 'translateY(-4px)' : 'translateY(0)',
+        transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
         cursor: 'pointer',
         border: urgent ? `2px solid ${brandColors.orange}` : `1px solid ${brandColors.gray[200]}`,
         opacity: isExpired || isSoldOut ? 0.7 : 1,
-        position: 'relative'
+        position: 'relative',
+        maxWidth: '320px'
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -117,13 +128,13 @@ export default function OfferCard({
       {urgent && !isExpired && (
         <div style={{
           position: 'absolute',
-          top: '12px',
-          left: '12px',
+          top: '8px',
+          left: '8px',
           backgroundColor: brandColors.orange,
           color: brandColors.white,
           padding: '4px 8px',
           borderRadius: '12px',
-          fontSize: '11px',
+          fontSize: '10px',
           fontWeight: '600',
           zIndex: 10,
           textTransform: 'uppercase'
@@ -139,10 +150,10 @@ export default function OfferCard({
           disabled={loading}
           style={{
             position: 'absolute',
-            top: '12px',
-            right: '12px',
-            width: '36px',
-            height: '36px',
+            top: '8px',
+            right: '8px',
+            width: '32px',
+            height: '32px',
             borderRadius: '50%',
             backgroundColor: isSaved ? brandColors.deepRed : brandColors.white,
             color: isSaved ? brandColors.white : brandColors.gray[600],
@@ -151,7 +162,7 @@ export default function OfferCard({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '16px',
+            fontSize: '14px',
             zIndex: 10,
             transition: 'all 0.2s ease'
           }}
@@ -162,9 +173,9 @@ export default function OfferCard({
 
       {/* Image or Gradient Background */}
       <div style={{
-        height: compact ? '120px' : '160px',
-        background: offer.product?.image_url 
-          ? `url(${offer.product.image_url})` 
+        height: '140px',
+        background: imageUrl 
+          ? `url(${imageUrl})` 
           : `linear-gradient(135deg, ${brandColors.deepRed} 0%, ${brandColors.orange} 100%)`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -177,11 +188,11 @@ export default function OfferCard({
         <div style={{
           backgroundColor: brandColors.white,
           color: brandColors.deepRed,
-          padding: '8px 16px',
-          borderRadius: '20px',
-          fontSize: '24px',
+          padding: '6px 12px',
+          borderRadius: '16px',
+          fontSize: '18px',
           fontWeight: '700',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
         }}>
           {offer.discount_type === 'percentage' 
             ? `${offer.discount_value}% OFF`
@@ -191,32 +202,32 @@ export default function OfferCard({
       </div>
 
       {/* Content */}
-      <div style={{ padding: compact ? '16px' : '20px' }}>
+      <div style={{ padding: '16px' }}>
         {/* Business Name */}
-        {offer.business && (
+        {(offer.business || offer.businesses) && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            marginBottom: '8px',
-            gap: '8px'
+            marginBottom: '6px',
+            gap: '6px'
           }}>
             <span style={{
               ...textStyles.body,
-              fontSize: '14px',
+              fontSize: '12px',
               color: brandColors.gray[600]
             }}>
-              {offer.business.business_name}
+              {offer.business?.business_name || offer.businesses?.business_name}
             </span>
-            {offer.business.is_verified && (
+            {(offer.business?.is_verified || offer.businesses?.is_verified) && (
               <span style={{
                 backgroundColor: brandColors.success,
                 color: brandColors.white,
-                padding: '2px 6px',
-                borderRadius: '8px',
-                fontSize: '10px',
+                padding: '1px 4px',
+                borderRadius: '6px',
+                fontSize: '9px',
                 fontWeight: '600'
               }}>
-                ✓ Verified
+                ✓
               </span>
             )}
           </div>
@@ -225,21 +236,25 @@ export default function OfferCard({
         {/* Offer Title */}
         <h3 style={{
           ...textStyles.h4,
-          fontSize: compact ? '16px' : '18px',
-          marginBottom: '8px',
-          lineHeight: '1.3'
+          fontSize: '16px',
+          marginBottom: '6px',
+          lineHeight: '1.3',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden'
         }}>
           {offer.title}
         </h3>
 
         {/* Description */}
-        {offer.description && !compact && (
+        {offer.description && (
           <p style={{
             ...textStyles.body,
-            fontSize: '14px',
+            fontSize: '13px',
             color: brandColors.gray[600],
-            marginBottom: '12px',
-            lineHeight: '1.4',
+            marginBottom: '10px',
+            lineHeight: '1.3',
             display: '-webkit-box',
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
@@ -254,18 +269,18 @@ export default function OfferCard({
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            marginBottom: '12px'
+            gap: '6px',
+            marginBottom: '10px'
           }}>
             <span style={{
-              fontSize: '18px',
+              fontSize: '16px',
               fontWeight: '700',
               color: brandColors.deepRed
             }}>
               ${offer.discounted_price}
             </span>
             <span style={{
-              fontSize: '14px',
+              fontSize: '13px',
               color: brandColors.gray[500],
               textDecoration: 'line-through'
             }}>
@@ -279,11 +294,12 @@ export default function OfferCard({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: showClaimButton ? '16px' : '0'
+          marginBottom: showClaimButton ? '12px' : '0',
+          gap: '8px'
         }}>
           {/* Time Remaining */}
           <span style={{
-            fontSize: '12px',
+            fontSize: '11px',
             fontWeight: '600',
             color: urgent || timeRemaining.includes('hour') 
               ? brandColors.orange 
@@ -291,27 +307,16 @@ export default function OfferCard({
             backgroundColor: urgent || timeRemaining.includes('hour')
               ? `${brandColors.orange}10`
               : brandColors.gray[100],
-            padding: '4px 8px',
-            borderRadius: '12px'
+            padding: '3px 6px',
+            borderRadius: '10px'
           }}>
             {timeRemaining}
           </span>
 
-          {/* Availability */}
-          {availability && (
-            <span style={{
-              fontSize: '12px',
-              fontWeight: '600',
-              color: availability.includes('Only') ? brandColors.orange : brandColors.gray[600]
-            }}>
-              {availability}
-            </span>
-          )}
-
           {/* Claims Count */}
           {offer.current_claims > 0 && (
             <span style={{
-              fontSize: '12px',
+              fontSize: '11px',
               color: brandColors.gray[500]
             }}>
               {offer.current_claims} claimed
@@ -326,12 +331,12 @@ export default function OfferCard({
             disabled={loading}
             style={{
               width: '100%',
-              padding: '12px',
+              padding: '10px',
               backgroundColor: loading ? brandColors.gray[400] : brandColors.deepRed,
               color: brandColors.white,
               border: 'none',
               borderRadius: '8px',
-              fontSize: '14px',
+              fontSize: '13px',
               fontWeight: '600',
               cursor: loading ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s ease'
@@ -344,11 +349,11 @@ export default function OfferCard({
         {/* Status Message */}
         {(isExpired || isSoldOut) && (
           <div style={{
-            padding: '8px 12px',
+            padding: '6px 10px',
             backgroundColor: brandColors.gray[100],
             color: brandColors.gray[600],
             borderRadius: '6px',
-            fontSize: '14px',
+            fontSize: '12px',
             fontWeight: '600',
             textAlign: 'center'
           }}>

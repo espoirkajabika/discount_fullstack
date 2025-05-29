@@ -1,4 +1,4 @@
-// components/products/ProductCard.js
+// components/products/ProductCard.js - Updated with smaller size and fixed images
 'use client'
 import { useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
@@ -35,18 +35,30 @@ export default function ProductCard({
     }
   }
 
+  // Get the product image URL - handle different API response structures
+  const getImageUrl = () => {
+    if (product.image_url) return product.image_url
+    if (product.imageUrl) return product.imageUrl
+    if (product.avatar_url) return product.avatar_url
+    return null
+  }
+
+  const imageUrl = getImageUrl()
+
   return (
     <div
       style={{
         backgroundColor: brandColors.white,
         borderRadius: '12px',
         overflow: 'hidden',
-        boxShadow: isHovered ? '0 8px 25px rgba(0,0,0,0.15)' : '0 4px 6px rgba(0,0,0,0.1)',
+        boxShadow: isHovered ? '0 6px 20px rgba(0,0,0,0.12)' : '0 2px 8px rgba(0,0,0,0.08)',
         transition: 'all 0.3s ease',
-        transform: isHovered ? 'translateY(-4px)' : 'translateY(0)',
+        transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
         cursor: 'pointer',
         border: `1px solid ${brandColors.gray[200]}`,
-        position: 'relative'
+        position: 'relative',
+        maxWidth: '300px',
+        opacity: product.is_active === false ? 0.7 : 1
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -59,10 +71,10 @@ export default function ProductCard({
           disabled={loading}
           style={{
             position: 'absolute',
-            top: '12px',
-            right: '12px',
-            width: '36px',
-            height: '36px',
+            top: '8px',
+            right: '8px',
+            width: '32px',
+            height: '32px',
             borderRadius: '50%',
             backgroundColor: isSaved ? brandColors.deepRed : brandColors.white,
             color: isSaved ? brandColors.white : brandColors.gray[600],
@@ -71,7 +83,7 @@ export default function ProductCard({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '16px',
+            fontSize: '14px',
             zIndex: 10,
             transition: 'all 0.2s ease'
           }}
@@ -82,9 +94,9 @@ export default function ProductCard({
 
       {/* Product Image */}
       <div style={{
-        height: compact ? '140px' : '180px',
-        background: product.image_url 
-          ? `url(${product.image_url})` 
+        height: compact ? '120px' : '140px',
+        background: imageUrl 
+          ? `url(${imageUrl})` 
           : `linear-gradient(135deg, ${brandColors.gray[200]} 0%, ${brandColors.gray[300]} 100%)`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -93,9 +105,9 @@ export default function ProductCard({
         justifyContent: 'center',
         position: 'relative'
       }}>
-        {!product.image_url && (
+        {!imageUrl && (
           <div style={{
-            fontSize: '48px',
+            fontSize: '32px',
             color: brandColors.gray[400]
           }}>
             📦
@@ -106,13 +118,13 @@ export default function ProductCard({
         {product.category && (
           <div style={{
             position: 'absolute',
-            bottom: '12px',
-            left: '12px',
+            bottom: '8px',
+            left: '8px',
             backgroundColor: brandColors.blackcurrant,
             color: brandColors.white,
-            padding: '4px 8px',
-            borderRadius: '12px',
-            fontSize: '11px',
+            padding: '3px 6px',
+            borderRadius: '10px',
+            fontSize: '10px',
             fontWeight: '600'
           }}>
             {product.category.name}
@@ -121,32 +133,32 @@ export default function ProductCard({
       </div>
 
       {/* Content */}
-      <div style={{ padding: compact ? '16px' : '20px' }}>
+      <div style={{ padding: compact ? '12px' : '16px' }}>
         {/* Business Name */}
-        {product.business && (
+        {(product.business || product.businesses) && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            marginBottom: '8px',
-            gap: '8px'
+            marginBottom: '6px',
+            gap: '6px'
           }}>
             <span style={{
               ...textStyles.body,
-              fontSize: '14px',
+              fontSize: '12px',
               color: brandColors.gray[600]
             }}>
-              {product.business.business_name}
+              {product.business?.business_name || product.businesses?.business_name}
             </span>
-            {product.business.is_verified && (
+            {(product.business?.is_verified || product.businesses?.is_verified) && (
               <span style={{
                 backgroundColor: brandColors.success,
                 color: brandColors.white,
-                padding: '2px 6px',
-                borderRadius: '8px',
-                fontSize: '10px',
+                padding: '1px 4px',
+                borderRadius: '6px',
+                fontSize: '9px',
                 fontWeight: '600'
               }}>
-                ✓ Verified
+                ✓
               </span>
             )}
           </div>
@@ -155,9 +167,13 @@ export default function ProductCard({
         {/* Product Name */}
         <h3 style={{
           ...textStyles.h4,
-          fontSize: compact ? '16px' : '18px',
-          marginBottom: '8px',
-          lineHeight: '1.3'
+          fontSize: compact ? '14px' : '16px',
+          marginBottom: '6px',
+          lineHeight: '1.3',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden'
         }}>
           {product.name}
         </h3>
@@ -166,10 +182,10 @@ export default function ProductCard({
         {product.description && !compact && (
           <p style={{
             ...textStyles.body,
-            fontSize: '14px',
+            fontSize: '13px',
             color: brandColors.gray[600],
-            marginBottom: '12px',
-            lineHeight: '1.4',
+            marginBottom: '10px',
+            lineHeight: '1.3',
             display: '-webkit-box',
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
@@ -179,7 +195,7 @@ export default function ProductCard({
           </p>
         )}
 
-        {/* Price */}
+        {/* Price and Actions */}
         {product.price && (
           <div style={{
             display: 'flex',
@@ -188,7 +204,7 @@ export default function ProductCard({
             marginTop: 'auto'
           }}>
             <span style={{
-              fontSize: '20px',
+              fontSize: compact ? '16px' : '18px',
               fontWeight: '700',
               color: brandColors.deepRed
             }}>
@@ -203,12 +219,12 @@ export default function ProductCard({
                 window.location.href = `/products/${product.id}/offers`
               }}
               style={{
-                padding: '6px 12px',
+                padding: '4px 8px',
                 backgroundColor: brandColors.rosePink,
                 color: brandColors.deepRed,
                 border: 'none',
-                borderRadius: '16px',
-                fontSize: '12px',
+                borderRadius: '12px',
+                fontSize: '11px',
                 fontWeight: '600',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease'
@@ -220,14 +236,14 @@ export default function ProductCard({
         )}
 
         {/* Active Status */}
-        {!product.is_active && (
+        {product.is_active === false && (
           <div style={{
-            marginTop: '12px',
-            padding: '6px 12px',
+            marginTop: '8px',
+            padding: '4px 8px',
             backgroundColor: brandColors.gray[100],
             color: brandColors.gray[600],
             borderRadius: '6px',
-            fontSize: '12px',
+            fontSize: '11px',
             fontWeight: '600',
             textAlign: 'center'
           }}>

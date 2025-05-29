@@ -14,6 +14,8 @@ import OfferCard from '@/components/offers/OfferCard'
 import ProductCard from '@/components/products/ProductCard'
 import CategoryCard from '@/components/categories/CategoryCard'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { ChartNoAxesCombined, ShieldAlert, Megaphone } from 'lucide-react'
+
 
 export default function Home() {
   const { isAuthenticated } = useAuth()
@@ -136,12 +138,12 @@ export default function Home() {
             marginBottom: '32px'
           }}>
             <h2 style={{
-              ...textStyles.h2,
+              ...textStyles.h4,
               display: 'flex',
               alignItems: 'center',
               gap: '12px'
             }}>
-              🔥 Trending Offers
+              <ChartNoAxesCombined /> Trending Offers
             </h2>
             <a
               href="/offers/trending"
@@ -204,12 +206,12 @@ export default function Home() {
               marginBottom: '32px'
             }}>
               <h2 style={{
-                ...textStyles.h2,
+                ...textStyles.h4,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px'
               }}>
-                ⏰ Expiring Soon
+                <ShieldAlert /> Expiring Soon
               </h2>
               <a
                 href="/offers/expiring"
@@ -233,8 +235,8 @@ export default function Home() {
             
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-              gap: '24px'
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: '20px'
             }}>
               {data.expiringOffers.map(offer => (
                 <OfferCard 
@@ -271,12 +273,12 @@ export default function Home() {
             marginBottom: '32px'
           }}>
             <h2 style={{
-              ...textStyles.h2,
+              ...textStyles.h4,
               display: 'flex',
               alignItems: 'center',
               gap: '12px'
             }}>
-              ⭐ Featured Products
+              <Megaphone /> Featured Products
             </h2>
             <a
               href="/products"
@@ -300,14 +302,15 @@ export default function Home() {
           
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '24px'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: '20px'
           }}>
             {data.featuredProducts.map(product => (
               <ProductCard 
                 key={product.id} 
                 product={product}
                 showSaveButton={isAuthenticated}
+                compact={true}
               />
             ))}
           </div>

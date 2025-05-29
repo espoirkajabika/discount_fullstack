@@ -64,7 +64,7 @@ export default function LoginForm() {
     const result = await login(formData.email, formData.password)
     
     if (result.success) {
-      router.push('/dashboard')
+      router.push('/')
     }
   }
 

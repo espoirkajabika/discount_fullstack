@@ -1,29 +1,48 @@
 // components/layout/Navbar.js
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { brandColors } from '@/lib/colors'
 import { textStyles } from '@/lib/typography'
 
 export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuth()
-  const [isMobile, setIsMobile] = useState(false)
-  const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [showDropdown, setShowDropdown] = useState(false)
+  const dropdownRef = useRef(null)
 
-  // Handle responsive design
+  // Close dropdown when clicking outside
   useEffect(() => {
-    const checkScreenSize = () => {
-      setIsMobile(window.innerWidth < 768)
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false)
+      }
     }
 
-    checkScreenSize()
-    window.addEventListener('resize', checkScreenSize)
-    return () => window.removeEventListener('resize', checkScreenSize)
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const toggleMobileMenu = () => {
-    setShowMobileMenu(!showMobileMenu)
+  const toggleDropdown = () => {
+    setShowDropdown(!showDropdown)
   }
+
+  const handleLogout = async () => {
+    await logout()
+    setShowDropdown(false)
+    window.location.href = '/'
+  }
+
+  const dropdownItems = isAuthenticated ? [
+    { label: 'Profile', href: '/profile', icon: '👤' },
+    { label: 'Account Settings', href: '/profile/settings', icon: '⚙️' },
+    { label: 'Saved Offers', href: '/saved-offers', icon: '❤️' },
+    { label: 'Claimed Offers', href: '/claimed-offers', icon: '🎫' },
+    { label: 'Dashboard', href: '/dashboard', icon: '🏠' },
+    { label: 'Logout', action: handleLogout, icon: '🚪' }
+  ] : [
+    { label: 'Login', href: '/login', icon: '🔑' },
+    { label: 'Sign Up', href: '/register', icon: '✨' }
+  ]
 
   return (
     <header style={{
@@ -61,217 +80,186 @@ export default function Navbar() {
             fontSize: '24px',
             fontWeight: '700'
           }}>
-            Discount Deals
+            Discount
           </h1>
         </a>
-        
-        {/* Navigation Links - Desktop */}
-        {!isMobile && (
-          <nav style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '32px'
-          }}>
-            <a 
-              href="/browse" 
-              style={{ 
-                ...textStyles.link, 
-                textDecoration: 'none',
-                fontSize: '16px',
-                fontWeight: '500'
-              }}
-            >
-              Browse
-            </a>
-            <a 
-              href="/categories" 
-              style={{ 
-                ...textStyles.link, 
-                textDecoration: 'none',
-                fontSize: '16px',
-                fontWeight: '500'
-              }}
-            >
-              Categories
-            </a>
-            {isAuthenticated && (
-              <a 
-                href="/saved" 
-                style={{ 
-                  ...textStyles.link, 
-                  textDecoration: 'none',
-                  fontSize: '16px',
-                  fontWeight: '500'
-                }}
-              >
-                Saved
-              </a>
-            )}
-          </nav>
-        )}
 
-        {/* Mobile Menu Button */}
-        {isMobile && (
+        {/* Avatar with Dropdown */}
+        <div ref={dropdownRef} style={{ position: 'relative' }}>
           <button
-            onClick={toggleMobileMenu}
+            onClick={toggleDropdown}
             style={{
-              padding: '8px',
-              backgroundColor: 'transparent',
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              backgroundColor: isAuthenticated ? brandColors.deepRed : brandColors.gray[400],
+              color: brandColors.white,
               border: 'none',
-              color: brandColors.deepRed,
-              fontSize: '24px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              transition: 'all 0.2s ease',
+              backgroundImage: user?.avatar_url ? `url(${user.avatar_url})` : 'none',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              boxShadow: showDropdown ? `0 0 0 3px ${brandColors.deepRed}30` : '0 2px 4px rgba(0,0,0,0.1)'
+            }}
+            onMouseEnter={(e) => {
+              if (!showDropdown) {
+                e.target.style.transform = 'scale(1.05)'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!showDropdown) {
+                e.target.style.transform = 'scale(1)'
+              }
             }}
           >
-            ☰
+            {isAuthenticated && !user?.avatar_url ? (
+              `${user?.first_name?.[0] || ''}${user?.last_name?.[0] || 'U'}`.toUpperCase()
+            ) : !isAuthenticated ? (
+              '👤'
+            ) : null}
           </button>
-        )}
 
-        {/* User Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          {isAuthenticated ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              {/* User Menu Dropdown */}
-              <div style={{ position: 'relative' }}>
-                <button
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '8px 16px',
-                    backgroundColor: brandColors.deepRed,
-                    color: brandColors.white,
-                    border: 'none',
-                    borderRadius: '20px',
-                    cursor: 'pointer',
+          {/* Dropdown Menu */}
+          {showDropdown && (
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              right: 0,
+              marginTop: '8px',
+              backgroundColor: brandColors.white,
+              borderRadius: '12px',
+              boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
+              border: `1px solid ${brandColors.gray[200]}`,
+              minWidth: '200px',
+              overflow: 'hidden',
+              zIndex: 1000,
+              animation: 'fadeIn 0.2s ease'
+            }}>
+              {/* User Info Header (if authenticated) */}
+              {isAuthenticated && (
+                <div style={{
+                  padding: '16px 20px',
+                  borderBottom: `1px solid ${brandColors.gray[100]}`,
+                  backgroundColor: brandColors.gray[25]
+                }}>
+                  <div style={{
                     fontSize: '14px',
                     fontWeight: '600',
-                    transition: 'all 0.2s ease'
-                  }}
-                  onClick={() => {
-                    // Toggle dropdown - implement dropdown logic
-                    window.location.href = '/profile'
-                  }}
-                >
-                  <div style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    backgroundColor: brandColors.white,
-                    color: brandColors.deepRed,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    backgroundImage: user?.avatar_url ? `url(${user.avatar_url})` : 'none',
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center'
+                    color: brandColors.gray[800],
+                    marginBottom: '4px'
                   }}>
-                    {!user?.avatar_url && (
-                      `${user?.first_name?.[0] || ''}${user?.last_name?.[0] || ''}`.toUpperCase()
-                    )}
+                    {user?.first_name && user?.last_name 
+                      ? `${user.first_name} ${user.last_name}`
+                      : 'User'
+                    }
                   </div>
-                  {!isMobile && user?.first_name}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <a
-                href="/login"
-                style={{
-                  padding: isMobile ? '8px 12px' : '10px 20px',
-                  backgroundColor: 'transparent',
-                  color: brandColors.deepRed,
-                  border: `2px solid ${brandColors.deepRed}`,
-                  borderRadius: '20px',
-                  textDecoration: 'none',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                Login
-              </a>
-              <a
-                href="/register"
-                style={{
-                  padding: isMobile ? '8px 12px' : '10px 20px',
-                  backgroundColor: brandColors.deepRed,
-                  color: brandColors.white,
-                  border: '2px solid transparent',
-                  borderRadius: '20px',
-                  textDecoration: 'none',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                Sign Up
-              </a>
+                  <div style={{
+                    fontSize: '12px',
+                    color: brandColors.gray[600]
+                  }}>
+                    {user?.email}
+                  </div>
+                </div>
+              )}
+
+              {/* Menu Items */}
+              {dropdownItems.map((item, index) => (
+                <div key={index}>
+                  {item.href ? (
+                    <a
+                      href={item.href}
+                      onClick={() => setShowDropdown(false)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '12px 20px',
+                        textDecoration: 'none',
+                        color: brandColors.gray[700],
+                        fontSize: '14px',
+                        transition: 'all 0.2s ease',
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = brandColors.gray[50]
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = 'transparent'
+                      }}
+                    >
+                      <span style={{ fontSize: '16px' }}>{item.icon}</span>
+                      {item.label}
+                    </a>
+                  ) : (
+                    <button
+                      onClick={item.action}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '12px 20px',
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        color: item.label === 'Logout' ? brandColors.error : brandColors.gray[700],
+                        fontSize: '14px',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = item.label === 'Logout' 
+                          ? `${brandColors.error}10` 
+                          : brandColors.gray[50]
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = 'transparent'
+                      }}
+                    >
+                      <span style={{ fontSize: '16px' }}>{item.icon}</span>
+                      {item.label}
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {/* Guest Welcome Message */}
+              {!isAuthenticated && (
+                <div style={{
+                  padding: '12px 20px',
+                  borderTop: `1px solid ${brandColors.gray[100]}`,
+                  backgroundColor: brandColors.gray[25],
+                  fontSize: '12px',
+                  color: brandColors.gray[600],
+                  textAlign: 'center'
+                }}>
+                  Welcome! Sign in to save offers and track your deals.
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      {/* Mobile Menu */}
-      {isMobile && showMobileMenu && (
-        <div style={{
-          backgroundColor: brandColors.white,
-          borderTop: `1px solid ${brandColors.gray[200]}`,
-          padding: '16px',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-        }}>
-          <nav style={{ 
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px'
-          }}>
-            <a 
-              href="/browse" 
-              style={{ 
-                ...textStyles.link, 
-                textDecoration: 'none',
-                fontSize: '16px',
-                fontWeight: '500',
-                padding: '8px 0'
-              }}
-              onClick={() => setShowMobileMenu(false)}
-            >
-              Browse
-            </a>
-            <a 
-              href="/categories" 
-              style={{ 
-                ...textStyles.link, 
-                textDecoration: 'none',
-                fontSize: '16px',
-                fontWeight: '500',
-                padding: '8px 0'
-              }}
-              onClick={() => setShowMobileMenu(false)}
-            >
-              Categories
-            </a>
-            {isAuthenticated && (
-              <a 
-                href="/saved" 
-                style={{ 
-                  ...textStyles.link, 
-                  textDecoration: 'none',
-                  fontSize: '16px',
-                  fontWeight: '500',
-                  padding: '8px 0'
-                }}
-                onClick={() => setShowMobileMenu(false)}
-              >
-                Saved
-              </a>
-            )}
-          </nav>
-        </div>
-      )}
+      {/* Add CSS for fade-in animation */}
+      <style jsx>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </header>
   )
 }

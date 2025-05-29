@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { brandColors } from '@/lib/colors'
+import { Search } from 'lucide-react'
 
 export default function SearchBar({ placeholder = "Search for deals, products, or businesses...", className = '' }) {
   const [query, setQuery] = useState('')
@@ -77,7 +78,7 @@ export default function SearchBar({ placeholder = "Search for deals, products, o
             color: brandColors.gray[400],
             fontSize: '18px'
           }}>
-            🔍
+            <Search />
           </div>
           
           {/* Input Field */}
