@@ -1,10 +1,10 @@
-// app/page.js - Updated to match wireframe
+// app/page.js - Updated with proper image fetching
 'use client'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { brandColors } from '@/lib/colors'
 import { textStyles } from '@/lib/typography'
-import api, { endpoints } from '@/lib/api'
+import api, { endpoints, apiHelpers } from '@/lib/api'
 
 // Components
 import Navbar from '@/components/layout/Navbar'
@@ -15,7 +15,6 @@ import ProductCard from '@/components/products/ProductCard'
 import CategoryCard from '@/components/categories/CategoryCard'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { ChartNoAxesCombined, ShieldAlert, Megaphone } from 'lucide-react'
-
 
 export default function Home() {
   const { isAuthenticated } = useAuth()
@@ -30,25 +29,25 @@ export default function Home() {
 
   useEffect(() => {
     loadHomeData()
+    
   }, [])
 
   const loadHomeData = async () => {
     try {
       setData(prev => ({ ...prev, loading: true, error: null }))
       
-      // Load all data concurrently
+      // Load all data concurrently using the new API helpers
       const [categoriesRes, trendingRes, expiringRes, productsRes] = await Promise.all([
         api.get(endpoints.categories),
-        api.get(endpoints.trendingOffers + '?limit=6'),
-        api.get(endpoints.expiringOffers + '?hours=48&limit=6'),
-        api.get(endpoints.searchProducts + '?page=1&size=6')
+        apiHelpers.getTrendingOffers(6),
+        apiHelpers.getExpiringOffers(48, 6),
+        apiHelpers.getProducts({ page: 1, size: 6 })
       ])
-
       setData({
         categories: categoriesRes.data || [],
-        trendingOffers: trendingRes.data.offers || [],
-        expiringOffers: expiringRes.data.offers || [],
-        featuredProducts: productsRes.data.products || [],
+        trendingOffers: trendingRes.offers || [],
+        expiringOffers: expiringRes.offers || [],
+        featuredProducts: productsRes.products || [],
         loading: false,
         error: null
       })

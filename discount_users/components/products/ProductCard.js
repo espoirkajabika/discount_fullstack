@@ -1,9 +1,10 @@
-// components/products/ProductCard.js - Updated with smaller size and fixed images
+// components/products/ProductCard.js - Updated with better image handling
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { brandColors } from '@/lib/colors'
 import { textStyles } from '@/lib/typography'
+import { getImageUrl } from '@/lib/api'
 
 export default function ProductCard({ 
   product, 
@@ -12,8 +13,9 @@ export default function ProductCard({
 }) {
   const { isAuthenticated } = useAuth()
   const [isHovered, setIsHovered] = useState(false)
-  const [isSaved, setIsSaved] = useState(false) // TODO: Get from API
+  const [isSaved, setIsSaved] = useState(false) // TODO: Implement product save functionality
   const [loading, setLoading] = useState(false)
+  const [imageError, setImageError] = useState(false)
 
   const handleSave = async (e) => {
     e.preventDefault()
@@ -26,7 +28,7 @@ export default function ProductCard({
 
     setLoading(true)
     try {
-      // TODO: Implement product save functionality
+      // TODO: Implement product save functionality when API endpoint is available
       setIsSaved(!isSaved)
     } catch (error) {
       console.error('Error saving product:', error)
@@ -35,15 +37,25 @@ export default function ProductCard({
     }
   }
 
-  // Get the product image URL - handle different API response structures
-  const getImageUrl = () => {
+  // Get the product image URL with better handling
+  const getProductImageUrl = () => {
+    // Check multiple possible image sources
     if (product.image_url) return product.image_url
     if (product.imageUrl) return product.imageUrl
     if (product.avatar_url) return product.avatar_url
+    
+    // If no direct image URL, try to construct from path
+    if (product.image_path) return getImageUrl(product.image_path)
+    
     return null
   }
 
-  const imageUrl = getImageUrl()
+  const imageUrl = getProductImageUrl()
+
+  // Handle image load error
+  const handleImageError = () => {
+    setImageError(true)
+  }
 
   return (
     <div
@@ -95,7 +107,7 @@ export default function ProductCard({
       {/* Product Image */}
       <div style={{
         height: compact ? '120px' : '140px',
-        background: imageUrl 
+        background: imageUrl && !imageError
           ? `url(${imageUrl})` 
           : `linear-gradient(135deg, ${brandColors.gray[200]} 0%, ${brandColors.gray[300]} 100%)`,
         backgroundSize: 'cover',
@@ -105,7 +117,18 @@ export default function ProductCard({
         justifyContent: 'center',
         position: 'relative'
       }}>
-        {!imageUrl && (
+        {/* Hidden image to detect load errors */}
+        {imageUrl && (
+          <img 
+            src={imageUrl} 
+            onError={handleImageError}
+            style={{ display: 'none' }}
+            alt=""
+          />
+        )}
+
+        {/* Fallback icon when no image */}
+        {(!imageUrl || imageError) && (
           <div style={{
             fontSize: '32px',
             color: brandColors.gray[400]
@@ -114,8 +137,25 @@ export default function ProductCard({
           </div>
         )}
 
+        {/* Image indicator */}
+        {imageUrl && !imageError && (
+          <div style={{
+            position: 'absolute',
+            top: '8px',
+            left: '8px',
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            color: brandColors.white,
+            padding: '2px 6px',
+            borderRadius: '8px',
+            fontSize: '10px',
+            fontWeight: '600'
+          }}>
+            📷
+          </div>
+        )}
+
         {/* Category Badge */}
-        {product.category && (
+        {(product.category || product.categories) && (
           <div style={{
             position: 'absolute',
             bottom: '8px',
@@ -127,7 +167,7 @@ export default function ProductCard({
             fontSize: '10px',
             fontWeight: '600'
           }}>
-            {product.category.name}
+            {product.category?.name || product.categories?.name}
           </div>
         )}
       </div>
@@ -208,7 +248,7 @@ export default function ProductCard({
               fontWeight: '700',
               color: brandColors.deepRed
             }}>
-              ${product.price}
+              ${typeof product.price === 'number' ? product.price.toFixed(2) : product.price}
             </span>
 
             {/* View Offers Button */}

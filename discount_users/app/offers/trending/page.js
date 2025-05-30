@@ -1,6 +1,6 @@
-// app/offers/trending/page.js - Trending offers with infinite scroll
+// app/offers/trending/page.js - Simple working version
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { brandColors } from '@/lib/colors'
 import { textStyles } from '@/lib/typography'
@@ -10,39 +10,23 @@ import api, { endpoints } from '@/lib/api'
 import Navbar from '@/components/layout/Navbar'
 import OfferCard from '@/components/offers/OfferCard'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { FlameKindling } from "lucide-react"
 
 export default function TrendingOffersPage() {
   const { isAuthenticated } = useAuth()
   const [offers, setOffers] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState(null)
   const [hasMore, setHasMore] = useState(true)
   const [page, setPage] = useState(1)
-  const [error, setError] = useState(null)
 
   const pageSize = 12
 
-  // Load initial offers
+  // Load offers on page load
   useEffect(() => {
     loadOffers(1, true)
   }, [])
-
-  // Infinite scroll setup
-  useEffect(() => {
-    const handleScroll = () => {
-      if (
-        window.innerHeight + document.documentElement.scrollTop
-        >= document.documentElement.offsetHeight - 1000 &&
-        !loadingMore &&
-        hasMore
-      ) {
-        loadMoreOffers()
-      }
-    }
-
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [loadingMore, hasMore])
 
   const loadOffers = async (pageNum = 1, reset = false) => {
     try {
@@ -53,32 +37,35 @@ export default function TrendingOffersPage() {
         setLoadingMore(true)
       }
 
-      const response = await api.get(`${endpoints.trendingOffers}?limit=${pageSize}&page=${pageNum}`)
-      const newOffers = response.data.offers || []
+      // Get trending offers with pagination
+      const response = await api.get(`${endpoints.trendingOffers}?limit=${pageSize}`)
+      const offersData = response.data.offers || []
 
       if (reset) {
-        setOffers(newOffers)
+        setOffers(offersData)
+        setPage(2) // Next page to load
       } else {
-        setOffers(prev => [...prev, ...newOffers])
+        setOffers(prev => [...prev, ...offersData])
+        setPage(prev => prev + 1)
       }
 
-      setHasMore(newOffers.length === pageSize)
-      setPage(pageNum + 1)
+      // Check if there are more offers to load
+      setHasMore(offersData.length === pageSize)
 
     } catch (error) {
-      console.error('Error loading offers:', error)
-      setError('Failed to load offers. Please try again.')
+      console.error('Error loading trending offers:', error)
+      setError('Failed to load trending offers. Please try again.')
     } finally {
       setLoading(false)
       setLoadingMore(false)
     }
   }
 
-  const loadMoreOffers = useCallback(() => {
+  const handleLoadMore = () => {
     if (!loadingMore && hasMore) {
       loadOffers(page)
     }
-  }, [page, loadingMore, hasMore])
+  }
 
   const handleRetry = () => {
     setError(null)
@@ -119,15 +106,15 @@ export default function TrendingOffersPage() {
             marginBottom: '16px'
           }}>
             <div>
-              <h1 style={{
-                ...textStyles.h1,
+              <h4 style={{
+                ...textStyles.h4,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '16px',
                 marginBottom: '8px'
               }}>
-                🔥 Trending Offers
-              </h1>
+                <FlameKindling /> Trending Offers
+              </h4>
               <p style={{
                 ...textStyles.body,
                 color: brandColors.gray[600]
@@ -234,27 +221,55 @@ export default function TrendingOffersPage() {
                 ))}
               </div>
 
-              {/* Loading More Indicator */}
-              {loadingMore && (
+              {/* Load More Button */}
+              {hasMore && (
                 <div style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  padding: '32px'
+                  textAlign: 'center',
+                  marginBottom: '32px'
                 }}>
-                  <LoadingSpinner size="32px" />
-                  <span style={{
-                    marginLeft: '12px',
-                    color: brandColors.gray[600],
-                    fontSize: '16px'
-                  }}>
-                    Loading more offers...
-                  </span>
+                  <button
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    style={{
+                      padding: '16px 32px',
+                      backgroundColor: loadingMore ? brandColors.gray[400] : brandColors.deepRed,
+                      color: brandColors.white,
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      cursor: loadingMore ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '12px',
+                      margin: '0 auto',
+                      minWidth: '160px'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!loadingMore) {
+                        e.target.style.backgroundColor = brandColors.orange
+                        e.target.style.transform = 'translateY(-2px)'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!loadingMore) {
+                        e.target.style.backgroundColor = brandColors.deepRed
+                        e.target.style.transform = 'translateY(0)'
+                      }
+                    }}
+                  >
+                    {loadingMore && (
+                      <LoadingSpinner size="20px" color={brandColors.white} />
+                    )}
+                    {loadingMore ? 'Loading More...' : 'Load More Offers'}
+                  </button>
                 </div>
               )}
 
               {/* End of Results */}
-              {!hasMore && !loadingMore && (
+              {!hasMore && !loadingMore && offers.length > pageSize && (
                 <div style={{
                   textAlign: 'center',
                   padding: '48px',

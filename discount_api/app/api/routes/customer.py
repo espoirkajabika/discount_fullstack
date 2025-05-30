@@ -18,6 +18,29 @@ from app.schemas.user import UserProfile
 from app.utils.dependencies import get_current_active_user, get_current_user_optional
 import uuid
 
+# Add this helper function at the top of your customer.py file (after imports)
+async def enrich_offers_with_product_data(offers_data):
+    """Fetch product data for offers and merge it"""
+    enriched_offers = []
+    
+    for offer in offers_data:
+        # Get the product data if product_id exists
+        if offer.get('product_id'):
+            try:
+                product_result = supabase.table("products").select(
+                    "*, categories(*)"
+                ).eq("id", offer['product_id']).execute()
+                
+                if product_result.data:
+                    offer['products'] = product_result.data[0]
+            except Exception as e:
+                print(f"Error fetching product for offer {offer.get('id')}: {e}")
+                offer['products'] = None
+        
+        enriched_offers.append(offer)
+    
+    return enriched_offers
+
 router = APIRouter(prefix="/customer", tags=["Customer"])
 
 # ============================================================================
@@ -121,9 +144,10 @@ async def search_offers(
         
         # Build query - only active offers within date range
         query = supabase.table("offers").select(
-            "*, products(*, categories(*)), businesses!inner(business_name, is_verified, avatar_url)", 
+             "*, products!product_id(*, categories(*)), businesses!inner(business_name, is_verified, avatar_url)",  
             count="exact"
         ).eq("is_active", True).gte("expiry_date", current_time).lte("start_date", current_time)
+
         
         # Apply search
         if q:
@@ -198,27 +222,58 @@ async def get_trending_offers(
     try:
         current_time = datetime.utcnow().isoformat()
         
-        # Build query for active offers, sorted by claim count
+        # Step 1: Get offers WITHOUT trying to join products
         query = supabase.table("offers").select(
-            "*, products(*, categories(*)), businesses!inner(business_name, is_verified, avatar_url)", 
+            "*, businesses!inner(business_name, is_verified, avatar_url)", 
             count="exact"
         ).eq("is_active", True).gte("expiry_date", current_time).lte("start_date", current_time)
-        
-        if category_id:
-            query = query.or_(f"products.category_id.eq.{category_id},businesses.category_id.eq.{category_id}")
         
         # Sort by current_claims descending to get most claimed offers
         query = query.order("current_claims", desc=True).limit(limit)
         
         result = query.execute()
         
-        # Transform data
-        offers = []
+        # Step 2: Manually fetch product data for each offer
+        enriched_offers = []
         for offer in result.data:
+            print(f"Processing offer {offer.get('id')} with product_id: {offer.get('product_id')}")
+            
+            # Get product data if product_id exists
+            if offer.get('product_id'):
+                try:
+                    product_result = supabase.table("products").select(
+                        "*, categories(*)"
+                    ).eq("id", offer['product_id']).execute()
+                    
+                    print(f"Product query result: {product_result.data}")
+                    
+                    if product_result.data:
+                        # Use 'products' (plural) to match your frontend
+                        offer['products'] = product_result.data[0]
+                        print(f"Added product data: {product_result.data[0].get('name')} with image: {product_result.data[0].get('image_url')}")
+                    else:
+                        offer['products'] = None
+                        print(f"No product found for ID: {offer['product_id']}")
+                except Exception as e:
+                    print(f"Error fetching product for offer {offer.get('id')}: {e}")
+                    offer['products'] = None
+            else:
+                offer['products'] = None
+            
+            enriched_offers.append(offer)
+        
+        # Step 3: Transform data
+        offers = []
+        for offer in enriched_offers:
             offer_data = offer.copy()
             if 'businesses' in offer_data:
                 offer_data['business'] = offer_data['businesses']
                 del offer_data['businesses']
+            
+            # Remove the null 'product' field and keep 'products'
+            if 'product' in offer_data:
+                del offer_data['product']
+                
             offers.append(OfferSearchResponse(**offer_data))
         
         return OfferListResponse(
@@ -230,11 +285,11 @@ async def get_trending_offers(
         )
         
     except Exception as e:
+        print(f"Error in get_trending_offers: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get trending offers: {str(e)}"
         )
-
 
 @router.get("/offers/expiring-soon", response_model=OfferListResponse)
 async def get_expiring_offers(
@@ -249,9 +304,9 @@ async def get_expiring_offers(
         current_time = datetime.utcnow()
         expiry_threshold = current_time + timedelta(hours=hours)
         
-        # Build query for offers expiring soon
+        # Step 1: Get offers WITHOUT product join
         query = supabase.table("offers").select(
-            "*, products(*, categories(*)), businesses!inner(business_name, is_verified, avatar_url)"
+            "*, businesses!inner(business_name, is_verified, avatar_url)"
         ).eq("is_active", True).gte("expiry_date", current_time.isoformat()).lte("expiry_date", expiry_threshold.isoformat())
         
         # Sort by expiry date ascending (most urgent first)
@@ -259,9 +314,30 @@ async def get_expiring_offers(
         
         result = query.execute()
         
-        # Transform data
-        offers = []
+        # Step 2: Manually fetch product data
+        enriched_offers = []
         for offer in result.data:
+            if offer.get('product_id'):
+                try:
+                    product_result = supabase.table("products").select(
+                        "*, categories(*)"
+                    ).eq("id", offer['product_id']).execute()
+                    
+                    if product_result.data:
+                        offer['products'] = product_result.data[0]
+                    else:
+                        offer['products'] = None
+                except Exception as e:
+                    print(f"Error fetching product for offer {offer.get('id')}: {e}")
+                    offer['products'] = None
+            else:
+                offer['products'] = None
+            
+            enriched_offers.append(offer)
+        
+        # Step 3: Transform data
+        offers = []
+        for offer in enriched_offers:
             offer_data = offer.copy()
             if 'businesses' in offer_data:
                 offer_data['business'] = offer_data['businesses']
@@ -281,7 +357,6 @@ async def get_expiring_offers(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get expiring offers: {str(e)}"
         )
-
 
 # ============================================================================
 # SAVED OFFERS (FAVORITES)
@@ -385,8 +460,8 @@ async def get_saved_offers(
     
     try:
         # Build query
-        query = supabase.table("saved_offers").select(
-            "*, offers(*, products(*, categories(*)), businesses(business_name, is_verified, avatar_url))",
+        query = supabase.table("offers").select(
+            "*, products!product_id(*, categories(*)), businesses!inner(business_name, is_verified, avatar_url))",
             count="exact"
         ).eq("user_id", str(current_user.id))
         
@@ -683,4 +758,47 @@ async def discover_businesses(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to discover businesses: {str(e)}"
+        )
+
+
+# In your discount_api/app/api/routes/business.py or customer.py
+def format_product_response(product):
+    """Format product response with proper image URL"""
+    if hasattr(product, 'image_url') and product.image_url:
+        # Ensure image URL is complete
+        if not product.image_url.startswith('http'):
+            base_url = settings.supabase_url
+            product.image_url = f"{base_url}/storage/v1/object/public/product-images/{product.image_url}"
+    return product
+
+@router.get("/products/{product_id}")
+async def get_product_by_id(product_id: str):
+    """Get a single product by ID"""
+    
+    try:
+        result = supabase.table("products").select(
+            "*, categories(*), businesses(business_name, is_verified, avatar_url)"
+        ).eq("id", product_id).eq("is_active", True).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Product not found"
+            )
+        
+        product = result.data[0]
+        
+        # Transform data to include business info
+        if 'businesses' in product:
+            product['business'] = product['businesses']
+            del product['businesses']
+            
+        return {"product": product}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve product: {str(e)}"
         )
