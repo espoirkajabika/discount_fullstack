@@ -1,5 +1,5 @@
-# app/schemas/customer.py
-from pydantic import BaseModel, ConfigDict
+# app/schemas/customer.py - Updated with enhanced claim support
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from decimal import Decimal
@@ -31,6 +31,26 @@ class OfferSearchResponse(OfferResponse):
 
 
 # ============================================================================
+# ENHANCED CLAIM SCHEMAS
+# ============================================================================
+
+class ClaimOfferRequest(BaseModel):
+    """Request schema for claiming an offer"""
+    claim_type: str = Field(..., pattern="^(online|in_store)$", description="Type of claim: 'online' or 'in_store'")
+    redirect_url: Optional[str] = Field(None, description="Optional redirect URL for online claims")
+
+
+class ClaimInfo(BaseModel):
+    """Information about how to use a claim"""
+    claim_id: str
+    claim_type: str
+    qr_code: Optional[str] = None
+    verification_url: Optional[str] = None
+    instructions: str
+    manual_entry_text: Optional[str] = None
+
+
+# ============================================================================
 # SAVED OFFERS SCHEMAS
 # ============================================================================
 
@@ -56,7 +76,7 @@ class SavedOfferListResponse(BaseModel):
 
 
 # ============================================================================
-# CLAIMED OFFERS SCHEMAS
+# ENHANCED CLAIMED OFFERS SCHEMAS
 # ============================================================================
 
 class ClaimedOfferBase(BaseModel):
@@ -66,6 +86,12 @@ class ClaimedOfferBase(BaseModel):
     is_redeemed: bool = False
     redeemed_at: Optional[datetime] = None
     redemption_notes: Optional[str] = None
+    
+    # Enhanced claim fields
+    claim_type: str = "in_store"
+    unique_claim_id: Optional[str] = None
+    qr_code_url: Optional[str] = None
+    merchant_redirect_url: Optional[str] = None
 
 
 class ClaimedOfferResponse(ClaimedOfferBase):
@@ -73,10 +99,37 @@ class ClaimedOfferResponse(ClaimedOfferBase):
     
     id: uuid.UUID
     offers: OfferResponse  # Full offer details
+    claim_info: Optional[ClaimInfo] = None  # Processed claim information for display
+
+
+class EnhancedClaimedOfferResponse(BaseModel):
+    """Enhanced response with claim display information"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    # Basic claim info
+    id: uuid.UUID
+    user_id: uuid.UUID
+    offer_id: uuid.UUID
+    claimed_at: datetime
+    is_redeemed: bool
+    redeemed_at: Optional[datetime] = None
+    redemption_notes: Optional[str] = None
+    
+    # Enhanced claim fields
+    claim_type: str
+    unique_claim_id: Optional[str] = None
+    qr_code_url: Optional[str] = None
+    merchant_redirect_url: Optional[str] = None
+    
+    # Related offer details
+    offer: OfferResponse
+    
+    # Processed claim information for easy frontend consumption
+    claim_display: ClaimInfo
 
 
 class ClaimedOfferListResponse(BaseModel):
-    claimed_offers: List[ClaimedOfferResponse]
+    claimed_offers: List[EnhancedClaimedOfferResponse]
     total: int
     page: int
     size: int
@@ -84,7 +137,57 @@ class ClaimedOfferListResponse(BaseModel):
 
 
 # ============================================================================
-# OFFER STATUS SCHEMA
+# CLAIM VERIFICATION SCHEMAS (for future merchant endpoints)
+# ============================================================================
+
+class ClaimVerificationRequest(BaseModel):
+    """Request to verify a claim"""
+    claim_identifier: str = Field(..., description="Claim ID or QR code content")
+    verification_type: str = Field(..., pattern="^(claim_id|qr_code)$")
+
+
+class ClaimVerificationResponse(BaseModel):
+    """Response for claim verification"""
+    is_valid: bool
+    claim_id: Optional[str] = None
+    offer_title: Optional[str] = None
+    customer_name: Optional[str] = None
+    business_name: Optional[str] = None
+    claimed_at: Optional[datetime] = None
+    is_redeemed: bool = False
+    redeemed_at: Optional[datetime] = None
+    discount_info: Optional[Dict[str, Any]] = None
+    error_message: Optional[str] = None
+
+
+class RedeemClaimRequest(BaseModel):
+    """Request to redeem a claim"""
+    claim_id: str
+    redemption_notes: Optional[str] = None
+
+
+class RedeemClaimResponse(BaseModel):
+    """Response for claim redemption"""
+    success: bool
+    message: str
+    redeemed_at: Optional[datetime] = None
+    claim_details: Optional[Dict[str, Any]] = None
+
+
+# ============================================================================
+# QR CODE SPECIFIC SCHEMAS
+# ============================================================================
+
+class QRCodeResponse(BaseModel):
+    """Response for QR code generation"""
+    qr_code_data_url: str = Field(..., description="Base64 encoded QR code image")
+    verification_url: str = Field(..., description="URL that the QR code points to")
+    claim_id: str = Field(..., description="The unique claim ID")
+    instructions: str = Field(..., description="Instructions for using the QR code")
+
+
+# ============================================================================
+# OFFER STATUS SCHEMA (Updated)
 # ============================================================================
 
 class OfferStatus(BaseModel):
@@ -94,6 +197,7 @@ class OfferStatus(BaseModel):
     is_claimed: bool
     can_claim: bool
     reason: Optional[str] = None
+    claimed_info: Optional[ClaimInfo] = None  # Include claim info if already claimed
 
 
 # ============================================================================
@@ -129,6 +233,11 @@ class CustomerStats(BaseModel):
     total_savings: Decimal
     favorite_categories: List[str]
     recent_activity_count: int
+    
+    # Enhanced claim stats
+    online_claims: int = 0
+    in_store_claims: int = 0
+    pending_redemptions: int = 0
 
 
 class OfferStats(BaseModel):
@@ -136,6 +245,9 @@ class OfferStats(BaseModel):
     total_views: int = 0
     total_saves: int = 0
     total_claims: int = 0
+    online_claims: int = 0
+    in_store_claims: int = 0
+    redemption_rate: float = 0.0
     save_to_claim_ratio: float = 0.0
     popularity_score: float = 0.0
 
@@ -206,6 +318,7 @@ class UserPreferences(BaseModel):
     min_discount_threshold: float
     max_travel_distance: Optional[float] = None
     notification_preferences: Dict[str, bool] = {}
+    default_claim_type: str = "in_store"  # User's preferred claim type
     updated_at: datetime
 
 
@@ -219,12 +332,13 @@ class NotificationSettings(BaseModel):
     price_drops: bool = True
     nearby_businesses: bool = False
     weekly_digest: bool = True
+    claim_reminders: bool = True  # Remind about unredeemed claims
 
 
 class Notification(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
-    type: str  # "new_offer", "expiring_soon", "price_drop", etc.
+    type: str  # "new_offer", "expiring_soon", "price_drop", "claim_reminder", etc.
     title: str
     message: str
     data: Dict[str, Any] = {}  # Additional context data
@@ -240,9 +354,17 @@ class OfferInteraction(BaseModel):
     """Track user interactions with offers"""
     user_id: uuid.UUID
     offer_id: uuid.UUID
-    interaction_type: str  # "view", "save", "unsave", "claim", "share"
+    interaction_type: str  # "view", "save", "unsave", "claim", "share", "redeem"
     created_at: datetime
     context: Optional[Dict[str, Any]] = None  # Search query, source page, etc.
+
+
+class ClaimInteraction(BaseModel):
+    """Track claim-specific interactions"""
+    claim_id: str
+    interaction_type: str  # "qr_generated", "qr_scanned", "manual_entry", "redeemed"
+    created_at: datetime
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class SearchAnalytics(BaseModel):

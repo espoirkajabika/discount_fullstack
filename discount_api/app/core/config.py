@@ -1,3 +1,4 @@
+# app/core/config.py - Updated configuration
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -19,6 +20,14 @@ class Settings(BaseSettings):
     # App Configuration
     app_name: str = "Offers API"
     debug: bool = False
+    
+    # Frontend/QR Code Configuration
+    frontend_url: str = "https://yourapp.com"  # Update this to your actual domain
+    api_base_url: str = "https://api.yourapp.com"  # Your API domain
+    
+    # QR Code Settings
+    qr_code_size: int = 10  # Box size for QR codes
+    qr_code_border: int = 4  # Border size for QR codes
     
     class Config:
         env_file = ".env"

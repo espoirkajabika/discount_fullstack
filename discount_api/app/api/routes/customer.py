@@ -12,11 +12,16 @@ from app.schemas.business import (
 from app.schemas.customer import (
     SavedOfferResponse, SavedOfferListResponse,
     ClaimedOfferResponse, ClaimedOfferListResponse,
-    OfferSearchResponse, ProductSearchResponse
+    OfferSearchResponse, ProductSearchResponse,
+    ClaimOfferRequest, ClaimInfo,  # Add these new imports
+    EnhancedClaimedOfferResponse, QRCodeResponse  # Add these new imports
 )
 from app.schemas.user import UserProfile
 from app.utils.dependencies import get_current_active_user, get_current_user_optional
 import uuid
+from datetime import datetime, timezone
+from app.core.database import supabase, supabase_admin
+
 
 # Add this helper function at the top of your customer.py file (after imports)
 async def enrich_offers_with_product_data(offers_data):
@@ -499,15 +504,20 @@ async def get_saved_offers(
 # OFFER CLAIMING
 # ============================================================================
 
-@router.post("/offers/{offer_id}/claim", response_model=ClaimedOfferResponse)
+@router.post("/offers/{offer_id}/claim", response_model=dict)
 async def claim_offer(
     offer_id: str,
+    claim_data: ClaimOfferRequest,
     current_user: UserProfile = Depends(get_current_active_user)
 ):
-    """Claim an offer"""
+    """Enhanced claim offer with support for online and in-store claims"""
     
     try:
-        current_time = datetime.utcnow()
+        # Use timezone-aware datetime for consistent comparisons
+        current_time = datetime.now(timezone.utc)
+        
+        print(f"Processing claim for user: {current_user.id}, offer: {offer_id}")
+        print(f"Claim type: {claim_data.claim_type}")
         
         # Check if offer exists and is claimable
         offer_check = supabase.table("offers").select("*").eq("id", offer_id).eq("is_active", True).execute()
@@ -519,11 +529,38 @@ async def claim_offer(
             )
         
         offer = offer_check.data[0]
+        print(f"Found offer: {offer.get('title', 'No title')}")
+        
+        # Parse dates from database - handle both formats
+        try:
+            start_date_str = offer["start_date"]
+            expiry_date_str = offer["expiry_date"]
+            
+            # Remove 'Z' and add proper timezone info if needed
+            if start_date_str.endswith('Z'):
+                start_date_str = start_date_str[:-1] + '+00:00'
+            if expiry_date_str.endswith('Z'):
+                expiry_date_str = expiry_date_str[:-1] + '+00:00'
+            
+            start_date = datetime.fromisoformat(start_date_str)
+            expiry_date = datetime.fromisoformat(expiry_date_str)
+            
+            # Ensure dates are timezone-aware
+            if start_date.tzinfo is None:
+                start_date = start_date.replace(tzinfo=timezone.utc)
+            if expiry_date.tzinfo is None:
+                expiry_date = expiry_date.replace(tzinfo=timezone.utc)
+                
+        except (ValueError, KeyError) as e:
+            print(f"Error parsing offer dates: {e}")
+            print(f"Start date: {offer.get('start_date')}")
+            print(f"Expiry date: {offer.get('expiry_date')}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Invalid offer date format"
+            )
         
         # Check if offer is within valid date range
-        start_date = datetime.fromisoformat(offer["start_date"].replace('Z', '+00:00'))
-        expiry_date = datetime.fromisoformat(offer["expiry_date"].replace('Z', '+00:00'))
-        
         if current_time < start_date:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -543,8 +580,8 @@ async def claim_offer(
                 detail="Offer has reached maximum claims"
             )
         
-        # Check if user already claimed this offer
-        existing_claim = supabase.table("claimed_offers").select("id").eq("user_id", str(current_user.id)).eq("offer_id", offer_id).execute()
+        # Check if user already claimed this offer (using admin client for reliability)
+        existing_claim = supabase_admin.table("claimed_offers").select("id").eq("user_id", str(current_user.id)).eq("offer_id", offer_id).execute()
         
         if existing_claim.data:
             raise HTTPException(
@@ -552,50 +589,242 @@ async def claim_offer(
                 detail="You have already claimed this offer"
             )
         
-        # Claim the offer
-        claim_data = {
+        # Import claim utilities
+        try:
+            from app.utils.claim_utils import ensure_unique_claim_id, generate_qr_code, get_claim_display_info
+        except ImportError as e:
+            print(f"Import error for claim utilities: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Claim utilities not available"
+            )
+        
+        # Generate unique claim ID for all claims (using admin client for checking)
+        unique_claim_id = ensure_unique_claim_id(supabase_admin)
+        print(f"Generated unique claim ID: {unique_claim_id}")
+        
+        # Prepare claim data based on claim type
+        claim_record = {
             "id": str(uuid.uuid4()),
             "user_id": str(current_user.id),
-            "offer_id": offer_id
+            "offer_id": offer_id,
+            "claim_type": claim_data.claim_type,
+            "unique_claim_id": unique_claim_id,
+            "claimed_at": current_time.isoformat()
         }
         
-        result = supabase.table("claimed_offers").insert(claim_data).execute()
+        print(f"Prepared claim record: {claim_record}")
+        
+        # Generate QR code and verification URL for in-store claims
+        qr_code_data_url = None
+        verification_url = None
+        
+        if claim_data.claim_type == "in_store":
+            try:
+                qr_code_data_url, verification_url = generate_qr_code(unique_claim_id)
+                claim_record["qr_code_url"] = qr_code_data_url
+                print(f"Generated QR code and verification URL")
+            except Exception as e:
+                print(f"QR code generation failed: {e}")
+                # Continue without QR code - user can still use manual claim ID
+                claim_record["qr_code_url"] = None
+        
+        elif claim_data.claim_type == "online":
+            # For online claims, use the provided redirect URL or the offer's business website
+            redirect_url = getattr(claim_data, 'redirect_url', None)
+            if not redirect_url:
+                # Get business website from the offer's business
+                business_check = supabase_admin.table("businesses").select("business_website").eq("id", offer["business_id"]).execute()
+                if business_check.data and business_check.data[0]["business_website"]:
+                    redirect_url = business_check.data[0]["business_website"]
+                else:
+                    # Default dead link as mentioned
+                    redirect_url = "https://merchant-website-placeholder.com"
+            
+            claim_record["merchant_redirect_url"] = redirect_url
+            print(f"Set redirect URL: {redirect_url}")
+        
+        # Insert the claim record using ADMIN CLIENT to bypass RLS
+        print("Inserting claim record using admin client...")
+        result = supabase_admin.table("claimed_offers").insert(claim_record).execute()
         
         if not result.data:
+            print("Failed to insert claim record")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to claim offer"
             )
         
-        # Increment offer claim count
-        supabase.table("offers").update({
+        print(f"Successfully inserted claim: {result.data[0]['id']}")
+        
+        # Increment offer claim count using admin client
+        update_result = supabase_admin.table("offers").update({
             "current_claims": offer["current_claims"] + 1
         }).eq("id", offer_id).execute()
         
-        # Get claimed offer with full details
-        claimed_offer = supabase.table("claimed_offers").select(
+        print(f"Updated offer claim count: {update_result.data}")
+        
+        # Get claimed offer with full details using admin client
+        claimed_offer_result = supabase_admin.table("claimed_offers").select(
             "*, offers(*, products(*, categories(*)), businesses(business_name, is_verified, avatar_url))"
         ).eq("id", result.data[0]["id"]).execute()
         
-        return ClaimedOfferResponse(**claimed_offer.data[0])
+        if not claimed_offer_result.data:
+            print("Failed to retrieve claimed offer details")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to retrieve claimed offer details"
+            )
+        
+        claimed_offer_data = claimed_offer_result.data[0]
+        print(f"Retrieved claimed offer data successfully")
+        
+        # Generate claim display information
+        try:
+            claim_display_info = get_claim_display_info(
+                claim_data.claim_type,
+                unique_claim_id,
+                qr_code_data_url
+            )
+        except Exception as e:
+            print(f"Error generating claim display info: {e}")
+            claim_display_info = {
+                "claim_id": unique_claim_id,
+                "claim_type": claim_data.claim_type,
+                "instructions": "Claim processed successfully"
+            }
+        
+        # Prepare response based on claim type
+        response_data = {
+            "success": True,
+            "claim_type": claim_data.claim_type,
+            "claim_id": unique_claim_id,
+            "claimed_at": current_time.isoformat(),
+            "offer": claimed_offer_data["offers"],
+            "claim_display": claim_display_info
+        }
+        
+        # Add type-specific data
+        if claim_data.claim_type == "in_store":
+            response_data.update({
+                "qr_code": qr_code_data_url,
+                "verification_url": verification_url,
+                "message": "Offer claimed successfully! Show the QR code or claim ID to the merchant for redemption."
+            })
+        
+        elif claim_data.claim_type == "online":
+            response_data.update({
+                "redirect_url": claim_record["merchant_redirect_url"],
+                "message": "Offer claimed successfully! You will be redirected to the merchant's website."
+            })
+        
+        print(f"Returning successful response for claim: {unique_claim_id}")
+        return response_data
         
     except HTTPException:
         raise
     except Exception as e:
+        print(f"Error claiming offer: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to claim offer: {str(e)}"
         )
 
 
-@router.get("/claimed-offers", response_model=ClaimedOfferListResponse)
+
+# Add new endpoint to get QR code for existing claims
+@router.get("/claimed-offers/{claim_id}/qr", response_model=dict)
+async def get_claim_qr_code(
+    claim_id: str,
+    current_user: UserProfile = Depends(get_current_active_user)
+):
+    """Get QR code for an existing in-store claim"""
+    
+    try:
+        # Get the claimed offer using admin client
+        claimed_offer = supabase_admin.table("claimed_offers").select(
+            "*, offers(title, business_id)"
+        ).eq("unique_claim_id", claim_id).eq("user_id", str(current_user.id)).execute()
+        
+        if not claimed_offer.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Claim not found"
+            )
+        
+        claim_data = claimed_offer.data[0]
+        
+        # Check if it's an in-store claim
+        if claim_data.get("claim_type") != "in_store":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="QR code is only available for in-store claims"
+            )
+        
+        # Check if already redeemed
+        if claim_data.get("is_redeemed"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This claim has already been redeemed"
+            )
+        
+        # Get or generate QR code
+        qr_code_url = claim_data.get("qr_code_url")
+        
+        if not qr_code_url:
+            # Generate QR code if it doesn't exist
+            try:
+                from app.utils.claim_utils import generate_qr_code
+                qr_code_data_url, verification_url = generate_qr_code(claim_id)
+                
+                # Update the record with the generated QR code using admin client
+                supabase_admin.table("claimed_offers").update({
+                    "qr_code_url": qr_code_data_url
+                }).eq("id", claim_data["id"]).execute()
+                
+                qr_code_url = qr_code_data_url
+                
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to generate QR code: {str(e)}"
+                )
+        
+        # Generate display information
+        from app.utils.claim_utils import get_claim_display_info
+        display_info = get_claim_display_info("in_store", claim_id, qr_code_url)
+        
+        return {
+            "claim_id": claim_id,
+            "offer_title": claim_data["offers"]["title"],
+            "qr_code": qr_code_url,
+            "verification_url": display_info.get("verification_url"),
+            "instructions": display_info.get("instructions"),
+            "manual_entry_text": display_info.get("manual_entry_text"),
+            "is_redeemed": claim_data.get("is_redeemed", False),
+            "claimed_at": claim_data.get("claimed_at")
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve QR code: {str(e)}"
+        )
+
+
+@router.get("/claimed-offers", response_model=dict)
 async def get_claimed_offers(
     current_user: UserProfile = Depends(get_current_active_user),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
-    redeemed_only: Optional[bool] = Query(None, description="Filter by redemption status")
+    redeemed_only: Optional[bool] = Query(None, description="Filter by redemption status"),
+    claim_type: Optional[str] = Query(None, regex="^(online|in_store)$", description="Filter by claim type")
 ):
-    """Get user's claimed offers"""
+    """Get user's claimed offers with enhanced claim information"""
     
     try:
         # Build query
@@ -607,6 +836,9 @@ async def get_claimed_offers(
         if redeemed_only is not None:
             query = query.eq("is_redeemed", redeemed_only)
         
+        if claim_type:
+            query = query.eq("claim_type", claim_type)
+        
         # Apply pagination
         offset = (page - 1) * size
         query = query.range(offset, offset + size - 1).order("claimed_at", desc=True)
@@ -616,17 +848,61 @@ async def get_claimed_offers(
         total = result.count if result.count else 0
         has_next = (page * size) < total
         
-        claimed_offers = [ClaimedOfferResponse(**claimed_offer) for claimed_offer in result.data]
+        # Process claimed offers with display information
+        enhanced_claimed_offers = []
         
-        return ClaimedOfferListResponse(
-            claimed_offers=claimed_offers,
-            total=total,
-            page=page,
-            size=size,
-            has_next=has_next
-        )
+        for claimed_offer in result.data:
+            # Generate claim display info
+            try:
+                from app.utils.claim_utils import get_claim_display_info
+                
+                claim_display = get_claim_display_info(
+                    claimed_offer.get("claim_type", "in_store"),
+                    claimed_offer.get("unique_claim_id"),
+                    claimed_offer.get("qr_code_url")
+                )
+                
+                # Create enhanced response
+                enhanced_offer = {
+                    "id": claimed_offer["id"],
+                    "user_id": claimed_offer["user_id"],
+                    "offer_id": claimed_offer["offer_id"],
+                    "claimed_at": claimed_offer["claimed_at"],
+                    "is_redeemed": claimed_offer.get("is_redeemed", False),
+                    "redeemed_at": claimed_offer.get("redeemed_at"),
+                    "redemption_notes": claimed_offer.get("redemption_notes"),
+                    "claim_type": claimed_offer.get("claim_type", "in_store"),
+                    "unique_claim_id": claimed_offer.get("unique_claim_id"),
+                    "qr_code_url": claimed_offer.get("qr_code_url"),
+                    "merchant_redirect_url": claimed_offer.get("merchant_redirect_url"),
+                    "offer": claimed_offer["offers"],
+                    "claim_display": claim_display
+                }
+                
+                enhanced_claimed_offers.append(enhanced_offer)
+                
+            except Exception as e:
+                print(f"Error processing claimed offer {claimed_offer['id']}: {e}")
+                # Include without display info if processing fails
+                enhanced_claimed_offers.append(claimed_offer)
+        
+        return {
+            "claimed_offers": enhanced_claimed_offers,
+            "total": total,
+            "page": page,
+            "size": size,
+            "has_next": has_next,
+            "summary": {
+                "total_claims": total,
+                "in_store_claims": len([c for c in enhanced_claimed_offers if c.get("claim_type") == "in_store"]),
+                "online_claims": len([c for c in enhanced_claimed_offers if c.get("claim_type") == "online"]),
+                "redeemed_claims": len([c for c in enhanced_claimed_offers if c.get("is_redeemed")]),
+                "pending_claims": len([c for c in enhanced_claimed_offers if not c.get("is_redeemed")])
+            }
+        }
         
     except Exception as e:
+        print(f"Error retrieving claimed offers: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve claimed offers: {str(e)}"
@@ -638,7 +914,7 @@ async def get_offer_status(
     offer_id: str,
     current_user: Optional[UserProfile] = Depends(get_current_user_optional)
 ):
-    """Get offer status for current user (saved, claimed, etc.)"""
+    """Get offer status for current user with enhanced claim information"""
     
     try:
         # Get basic offer info
@@ -656,18 +932,41 @@ async def get_offer_status(
             "is_saved": False,
             "is_claimed": False,
             "can_claim": True,
-            "reason": None
+            "reason": None,
+            "claimed_info": None
         }
         
         if not current_user:
             return status_info
         
         offer = offer_check.data[0]
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         
-        # Check availability
-        start_date = datetime.fromisoformat(offer["start_date"].replace('Z', '+00:00'))
-        expiry_date = datetime.fromisoformat(offer["expiry_date"].replace('Z', '+00:00'))
+        # Check availability with proper timezone handling
+        try:
+            start_date_str = offer["start_date"]
+            expiry_date_str = offer["expiry_date"]
+            
+            # Remove 'Z' and add proper timezone info if needed
+            if start_date_str.endswith('Z'):
+                start_date_str = start_date_str[:-1] + '+00:00'
+            if expiry_date_str.endswith('Z'):
+                expiry_date_str = expiry_date_str[:-1] + '+00:00'
+            
+            start_date = datetime.fromisoformat(start_date_str)
+            expiry_date = datetime.fromisoformat(expiry_date_str)
+            
+            # Ensure dates are timezone-aware
+            if start_date.tzinfo is None:
+                start_date = start_date.replace(tzinfo=timezone.utc)
+            if expiry_date.tzinfo is None:
+                expiry_date = expiry_date.replace(tzinfo=timezone.utc)
+                
+        except (ValueError, KeyError) as e:
+            print(f"Error parsing offer dates in status check: {e}")
+            # If date parsing fails, assume offer is available
+            start_date = current_time
+            expiry_date = current_time
         
         if current_time < start_date:
             status_info["can_claim"] = False
@@ -684,18 +983,37 @@ async def get_offer_status(
         saved_check = supabase.table("saved_offers").select("id").eq("user_id", str(current_user.id)).eq("offer_id", offer_id).execute()
         status_info["is_saved"] = bool(saved_check.data)
         
-        # Check if claimed
-        claimed_check = supabase.table("claimed_offers").select("id").eq("user_id", str(current_user.id)).eq("offer_id", offer_id).execute()
+        # Check if claimed and get claim info
+        claimed_check = supabase.table("claimed_offers").select("*").eq("user_id", str(current_user.id)).eq("offer_id", offer_id).execute()
         if claimed_check.data:
+            claim = claimed_check.data[0]
             status_info["is_claimed"] = True
             status_info["can_claim"] = False
             status_info["reason"] = "Already claimed"
+            
+            # Include claim display information
+            try:
+                from app.utils.claim_utils import get_claim_display_info
+                
+                claim_display = get_claim_display_info(
+                    claim.get("claim_type", "in_store"),
+                    claim.get("unique_claim_id"),
+                    claim.get("qr_code_url")
+                )
+                
+                status_info["claimed_info"] = claim_display
+                status_info["claimed_info"]["is_redeemed"] = claim.get("is_redeemed", False)
+                status_info["claimed_info"]["claimed_at"] = claim.get("claimed_at")
+                
+            except Exception as e:
+                print(f"Error generating claim display info: {e}")
         
         return status_info
         
     except HTTPException:
         raise
     except Exception as e:
+        print(f"Error getting offer status: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get offer status: {str(e)}"
