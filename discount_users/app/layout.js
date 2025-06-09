@@ -1,6 +1,7 @@
-// app/layout.js
-import { Geist, Geist_Mono } from "next/font/google";
+// app/layout.js - Update your existing layout file
+import { Geist, Geist_Mono } from "next/font/google"; // FIXED: changed from "next/font/next"
 import { AuthProvider } from '@/context/AuthContext'
+import { ToastProvider } from '@/components/ui/SimpleToast' 
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,12 +29,32 @@ export default function RootLayout({ children }) {
               0% { transform: rotate(0deg); }
               100% { transform: rotate(360deg); }
             }
+            
+            /* Loading spinner styles */
+            .loading-spinner {
+              width: 40px;
+              height: 40px;
+              border: 4px solid #f3f4f6;
+              border-top: 4px solid #8E0D3C;
+              border-radius: 50%;
+              animation: spin 1s linear infinite;
+            }
+            
+            .loading-container {
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              background-color: #f9fafb;
+            }
           `
         }} />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthProvider>
-          {children}
+          <ToastProvider>
+            {children}
+          </ToastProvider>
         </AuthProvider>
       </body>
     </html>
