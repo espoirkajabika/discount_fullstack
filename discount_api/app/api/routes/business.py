@@ -6,6 +6,10 @@ import uuid
 import os
 from pathlib import Path
 from decimal import Decimal
+
+from datetime import datetime, timedelta
+from datetime import timezone
+
 from app.core.database import supabase, supabase_admin
 from app.core.config import settings 
 from app.schemas.business import (
@@ -1080,4 +1084,549 @@ async def delete_offer(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Offer deletion failed: {str(e)}"
+        )
+
+
+
+# Add these endpoints to your existing discount_api/app/api/routes/business.py file
+
+# ============================================================================
+# CLAIM REDEMPTION ENDPOINTS
+# ============================================================================
+
+@router.post("/redeem/verify", response_model=dict)
+async def verify_claim_for_redemption(
+    verification_request: dict,  # {"claim_identifier": "CLAIM123", "verification_type": "claim_id|qr_code"}
+    current_user: UserProfile = Depends(get_current_business_user)
+):
+    """Verify a claim for redemption by claim ID or QR code"""
+    
+    try:
+        claim_identifier = verification_request.get("claim_identifier", "").strip()
+        verification_type = verification_request.get("verification_type", "claim_id")
+        
+        if not claim_identifier:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Claim identifier is required"
+            )
+        
+        print(f"Verifying claim: {claim_identifier} for business user: {current_user.id}")
+        
+        # Get user's business
+        business_result = supabase_admin.table("businesses").select("id, business_name").eq("user_id", str(current_user.id)).execute()
+        
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
+        
+        business = business_result.data[0]
+        business_id = business["id"]
+        business_name = business["business_name"]
+        
+        # Extract claim ID from QR code if needed
+        if verification_type == "qr_code":
+            # QR codes contain verification URLs, extract claim ID
+            try:
+                # Handle different QR code formats
+                if "claim_id=" in claim_identifier:
+                    claim_id = claim_identifier.split("claim_id=")[1].split("&")[0]
+                elif "/verify/" in claim_identifier:
+                    claim_id = claim_identifier.split("/verify/")[1].split("?")[0]
+                else:
+                    # Assume the QR code content is just the claim ID
+                    claim_id = claim_identifier
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid QR code format"
+                )
+        else:
+            claim_id = claim_identifier
+        
+        print(f"Extracted claim ID: {claim_id}")
+        
+        # Find the claimed offer
+        claimed_offer_result = supabase_admin.table("claimed_offers").select(
+            "*, offers(*, products(*, categories(*)), businesses(id, business_name)), profiles!user_id(first_name, last_name, email)"
+        ).eq("unique_claim_id", claim_id).execute()
+        
+        if not claimed_offer_result.data:
+            return {
+                "is_valid": False,
+                "error_message": "Claim not found",
+                "error_code": "CLAIM_NOT_FOUND"
+            }
+        
+        claimed_offer = claimed_offer_result.data[0]
+        offer = claimed_offer["offers"]
+        customer = claimed_offer["profiles"]
+        
+        print(f"Found claim for offer: {offer.get('title')} by customer: {customer.get('email')}")
+        
+        # Verify this claim belongs to the current business
+        if offer["business_id"] != business_id:
+            return {
+                "is_valid": False,
+                "error_message": "This claim does not belong to your business",
+                "error_code": "UNAUTHORIZED_BUSINESS"
+            }
+        
+        # Check if already redeemed
+        if claimed_offer.get("is_redeemed", False):
+            return {
+                "is_valid": False,
+                "error_message": "This claim has already been redeemed",
+                "error_code": "ALREADY_REDEEMED",
+                "redeemed_at": claimed_offer.get("redeemed_at"),
+                "redemption_notes": claimed_offer.get("redemption_notes")
+            }
+        
+        # Check if offer is still valid
+        current_time = datetime.now(timezone.utc)
+        
+        try:
+            expiry_date_str = offer["expiry_date"]
+            if expiry_date_str.endswith('Z'):
+                expiry_date_str = expiry_date_str[:-1] + '+00:00'
+            
+            expiry_date = datetime.fromisoformat(expiry_date_str)
+            if expiry_date.tzinfo is None:
+                expiry_date = expiry_date.replace(tzinfo=timezone.utc)
+                
+            if current_time > expiry_date:
+                return {
+                    "is_valid": False,
+                    "error_message": "This offer has expired",
+                    "error_code": "OFFER_EXPIRED",
+                    "expiry_date": offer["expiry_date"]
+                }
+                
+        except (ValueError, KeyError) as e:
+            print(f"Error parsing expiry date: {e}")
+            # Continue with verification if date parsing fails
+        
+        # Calculate discount info
+        discount_info = {
+            "discount_type": offer["discount_type"],
+            "discount_value": float(offer["discount_value"]) if offer["discount_value"] else 0,
+            "original_price": float(offer["original_price"]) if offer["original_price"] else 0,
+            "discounted_price": float(offer["discounted_price"]) if offer["discounted_price"] else 0
+        }
+        
+        if offer["discount_type"] == "percentage":
+            discount_info["discount_text"] = f"{discount_info['discount_value']}% off"
+        else:
+            discount_info["discount_text"] = f"${discount_info['discount_value']} off"
+        
+        # Return successful verification
+        return {
+            "is_valid": True,
+            "claim_id": claim_id,
+            "claim_details": {
+                "id": claimed_offer["id"],
+                "claim_id": claim_id,
+                "claim_type": claimed_offer.get("claim_type", "in_store"),
+                "claimed_at": claimed_offer["claimed_at"],
+                "customer": {
+                    "name": f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip() or "Customer",
+                    "email": customer.get("email"),
+                    "first_name": customer.get("first_name"),
+                    "last_name": customer.get("last_name")
+                },
+                "offer": {
+                    "id": offer["id"],
+                    "title": offer["title"],
+                    "description": offer.get("description"),
+                    "product_name": offer["products"]["name"] if offer.get("products") else None,
+                    "business_name": business_name
+                },
+                "discount_info": discount_info
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error verifying claim: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to verify claim: {str(e)}"
+        )
+
+
+@router.post("/redeem/complete", response_model=dict)
+async def complete_claim_redemption(
+    redemption_request: dict,  # {"claim_id": "CLAIM123", "redemption_notes": "optional notes"}
+    current_user: UserProfile = Depends(get_current_business_user)
+):
+    """Complete the redemption of a verified claim"""
+    
+    try:
+        claim_id = redemption_request.get("claim_id", "").strip()
+        redemption_notes = redemption_request.get("redemption_notes", "").strip()
+        
+        if not claim_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Claim ID is required"
+            )
+        
+        print(f"Completing redemption for claim: {claim_id}")
+        
+        # Get user's business
+        business_result = supabase_admin.table("businesses").select("id, business_name").eq("user_id", str(current_user.id)).execute()
+        
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
+        
+        business = business_result.data[0]
+        business_id = business["id"]
+        
+        # Find and verify the claimed offer again (security check)
+        claimed_offer_result = supabase_admin.table("claimed_offers").select(
+            "*, offers(business_id, title, expiry_date), profiles!user_id(first_name, last_name, email)"
+        ).eq("unique_claim_id", claim_id).execute()
+        
+        if not claimed_offer_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Claim not found"
+            )
+        
+        claimed_offer = claimed_offer_result.data[0]
+        offer = claimed_offer["offers"]
+        customer = claimed_offer["profiles"]
+        
+        # Verify business ownership
+        if offer["business_id"] != business_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only redeem claims for your own business"
+            )
+        
+        # Check if already redeemed
+        if claimed_offer.get("is_redeemed", False):
+            return {
+                "success": False,
+                "message": "This claim has already been redeemed",
+                "error_code": "ALREADY_REDEEMED",
+                "redeemed_at": claimed_offer.get("redeemed_at")
+            }
+        
+        # Mark as redeemed
+        current_time = datetime.now(timezone.utc)
+        
+        redemption_update = {
+            "is_redeemed": True,
+            "redeemed_at": current_time.isoformat(),
+            "redemption_notes": redemption_notes or f"Redeemed by {business['business_name']}"
+        }
+        
+        update_result = supabase_admin.table("claimed_offers").update(redemption_update).eq("id", claimed_offer["id"]).execute()
+        
+        if not update_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to mark claim as redeemed"
+            )
+        
+        print(f"Successfully redeemed claim {claim_id}")
+        
+        # Return success response
+        return {
+            "success": True,
+            "message": "Claim redeemed successfully!",
+            "redemption_details": {
+                "claim_id": claim_id,
+                "redeemed_at": current_time.isoformat(),
+                "customer_name": f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip() or "Customer",
+                "customer_email": customer.get("email"),
+                "offer_title": offer["title"],
+                "business_name": business["business_name"],
+                "redemption_notes": redemption_notes
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error completing redemption: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to complete redemption: {str(e)}"
+        )
+
+
+@router.get("/redeem/history", response_model=dict)
+async def get_redemption_history(
+    current_user: UserProfile = Depends(get_current_business_user),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    offer_id: Optional[str] = Query(None, description="Filter by specific offer"),
+    redeemed_only: bool = Query(True, description="Show only redeemed claims")
+):
+    """Get redemption history for the business"""
+    
+    try:
+        # Get user's business
+        business_result = supabase_admin.table("businesses").select("id, business_name").eq("user_id", str(current_user.id)).execute()
+        
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
+        
+        business_id = business_result.data[0]["id"]
+        
+        # Build query - get claims for offers belonging to this business
+        query = supabase_admin.table("claimed_offers").select(
+            "*, offers!inner(id, title, business_id, discount_type, discount_value, original_price, discounted_price, products(name)), profiles!user_id(first_name, last_name, email)",
+            count="exact"
+        ).eq("offers.business_id", business_id)
+        
+        if redeemed_only:
+            query = query.eq("is_redeemed", True)
+        
+        if offer_id:
+            query = query.eq("offer_id", offer_id)
+        
+        # Apply date filters
+        if start_date:
+            try:
+                start_datetime = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc).isoformat()
+                if redeemed_only:
+                    query = query.gte("redeemed_at", start_datetime)
+                else:
+                    query = query.gte("claimed_at", start_datetime)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid start_date format. Use YYYY-MM-DD"
+                )
+        
+        if end_date:
+            try:
+                end_datetime = datetime.fromisoformat(end_date).replace(hour=23, minute=59, second=59, tzinfo=timezone.utc).isoformat()
+                if redeemed_only:
+                    query = query.lte("redeemed_at", end_datetime)
+                else:
+                    query = query.lte("claimed_at", end_datetime)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid end_date format. Use YYYY-MM-DD"
+                )
+        
+        # Apply pagination and sorting
+        offset = (page - 1) * limit
+        sort_field = "redeemed_at" if redeemed_only else "claimed_at"
+        query = query.order(sort_field, desc=True).range(offset, offset + limit - 1)
+        
+        result = query.execute()
+        
+        total = result.count if result.count else 0
+        total_pages = (total + limit - 1) // limit
+        
+        # Process results
+        redemptions = []
+        total_savings_provided = 0
+        
+        for claim in result.data:
+            offer = claim["offers"]
+            customer = claim["profiles"]
+            
+            # Calculate savings
+            savings = 0
+            if offer["discount_type"] == "percentage" and offer["original_price"]:
+                savings = float(offer["original_price"]) * (float(offer["discount_value"]) / 100)
+            elif offer["discount_type"] == "fixed":
+                savings = float(offer["discount_value"]) if offer["discount_value"] else 0
+            
+            if claim.get("is_redeemed"):
+                total_savings_provided += savings
+            
+            redemption_data = {
+                "id": claim["id"],
+                "claim_id": claim.get("unique_claim_id"),
+                "claim_type": claim.get("claim_type", "in_store"),
+                "customer": {
+                    "name": f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip() or "Customer",
+                    "email": customer.get("email"),
+                    "first_name": customer.get("first_name"),
+                    "last_name": customer.get("last_name")
+                },
+                "offer": {
+                    "id": offer["id"],
+                    "title": offer["title"],
+                    "product_name": offer["products"]["name"] if offer.get("products") else None,
+                    "discount_type": offer["discount_type"],
+                    "discount_value": float(offer["discount_value"]) if offer["discount_value"] else 0,
+                    "savings_amount": savings
+                },
+                "claimed_at": claim["claimed_at"],
+                "is_redeemed": claim.get("is_redeemed", False),
+                "redeemed_at": claim.get("redeemed_at"),
+                "redemption_notes": claim.get("redemption_notes")
+            }
+            
+            redemptions.append(redemption_data)
+        
+        # Calculate summary stats
+        redeemed_count = len([r for r in redemptions if r["is_redeemed"]])
+        pending_count = len([r for r in redemptions if not r["is_redeemed"]])
+        
+        return {
+            "redemptions": redemptions,
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "total_pages": total_pages,
+                "has_next": page < total_pages,
+                "has_prev": page > 1
+            },
+            "summary": {
+                "total_claims": total,
+                "redeemed_claims": redeemed_count,
+                "pending_claims": pending_count,
+                "total_savings_provided": round(total_savings_provided, 2),
+                "redemption_rate": round((redeemed_count / total * 100) if total > 0 else 0, 1)
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting redemption history: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get redemption history: {str(e)}"
+        )
+
+
+@router.get("/redeem/stats", response_model=dict)
+async def get_redemption_stats(
+    current_user: UserProfile = Depends(get_current_business_user),
+    days: int = Query(30, ge=1, le=365, description="Number of days to include in stats")
+):
+    """Get redemption statistics for the business"""
+    
+    try:
+        # Get user's business
+        business_result = supabase_admin.table("businesses").select("id, business_name").eq("user_id", str(current_user.id)).execute()
+        
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
+        
+        business_id = business_result.data[0]["id"]
+        
+        # Calculate date range
+        end_date = datetime.now(timezone.utc)
+        start_date = end_date - timedelta(days=days)
+        
+        # Get claims data
+        claims_result = supabase_admin.table("claimed_offers").select(
+            "*, offers!inner(business_id, discount_type, discount_value, original_price)"
+        ).eq("offers.business_id", business_id).gte("claimed_at", start_date.isoformat()).execute()
+        
+        if not claims_result.data:
+            return {
+                "period_days": days,
+                "total_claims": 0,
+                "total_redemptions": 0,
+                "pending_redemptions": 0,
+                "redemption_rate": 0,
+                "total_savings_provided": 0,
+                "daily_breakdown": [],
+                "claim_types": {"in_store": 0, "online": 0}
+            }
+        
+        claims = claims_result.data
+        
+        # Calculate stats
+        total_claims = len(claims)
+        redeemed_claims = [c for c in claims if c.get("is_redeemed")]
+        pending_claims = [c for c in claims if not c.get("is_redeemed")]
+        
+        total_redemptions = len(redeemed_claims)
+        pending_redemptions = len(pending_claims)
+        redemption_rate = (total_redemptions / total_claims * 100) if total_claims > 0 else 0
+        
+        # Calculate total savings provided
+        total_savings = 0
+        for claim in redeemed_claims:
+            offer = claim["offers"]
+            if offer["discount_type"] == "percentage" and offer["original_price"]:
+                savings = float(offer["original_price"]) * (float(offer["discount_value"]) / 100)
+            elif offer["discount_type"] == "fixed":
+                savings = float(offer["discount_value"]) if offer["discount_value"] else 0
+            else:
+                savings = 0
+            total_savings += savings
+        
+        # Claim type breakdown
+        claim_types = {"in_store": 0, "online": 0}
+        for claim in claims:
+            claim_type = claim.get("claim_type", "in_store")
+            claim_types[claim_type] = claim_types.get(claim_type, 0) + 1
+        
+        # Daily breakdown (last 7 days for chart)
+        daily_breakdown = []
+        for i in range(min(7, days)):
+            day_date = end_date - timedelta(days=i)
+            day_start = day_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+            
+            day_claims = [c for c in claims if day_start <= datetime.fromisoformat(c["claimed_at"].replace('Z', '+00:00')) <= day_end]
+            day_redemptions = [c for c in day_claims if c.get("is_redeemed")]
+            
+            daily_breakdown.append({
+                "date": day_start.strftime("%Y-%m-%d"),
+                "claims": len(day_claims),
+                "redemptions": len(day_redemptions)
+            })
+        
+        # Reverse to show oldest first
+        daily_breakdown.reverse()
+        
+        return {
+            "period_days": days,
+            "date_range": {
+                "start": start_date.strftime("%Y-%m-%d"),
+                "end": end_date.strftime("%Y-%m-%d")
+            },
+            "total_claims": total_claims,
+            "total_redemptions": total_redemptions,
+            "pending_redemptions": pending_redemptions,
+            "redemption_rate": round(redemption_rate, 1),
+            "total_savings_provided": round(total_savings, 2),
+            "daily_breakdown": daily_breakdown,
+            "claim_types": claim_types
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting redemption stats: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get redemption stats: {str(e)}"
         )
