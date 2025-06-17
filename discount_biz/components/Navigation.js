@@ -27,7 +27,7 @@ export function PageHeader({
     const pathSegments = pathname.split('/').filter(Boolean);
     const breadcrumbs = [];
 
-    // Add Home
+    // Add Home - always first
     breadcrumbs.push({ label: 'Dashboard', href: '/dashboard', icon: Home });
 
     // Map common paths
@@ -36,12 +36,18 @@ export function PageHeader({
       'offers': 'Offers',
       'new': 'New',
       'edit': 'Edit',
-      'analytics': 'Analytics'
+      'analytics': 'Analytics',
+      'redeem': 'Redeem'
     };
 
     let currentPath = '';
     pathSegments.forEach((segment, index) => {
       currentPath += `/${segment}`;
+      
+      // Skip the first 'dashboard' segment since we already added it as Home
+      if (segment === 'dashboard' && currentPath === '/dashboard') {
+        return;
+      }
       
       // Skip UUID-like segments (product/offer IDs)
       if (segment.length === 36 && segment.includes('-')) {
@@ -70,7 +76,7 @@ export function PageHeader({
             {/* Breadcrumbs */}
             <nav className="flex items-center space-x-2 text-sm">
               {breadcrumbs.map((crumb, index) => (
-                <div key={crumb.href} className="flex items-center space-x-2">
+                <div key={`${crumb.href}-${index}`} className="flex items-center space-x-2">
                   {index > 0 && <span className="text-gray-400">/</span>}
                   <button
                     onClick={() => router.push(crumb.href)}

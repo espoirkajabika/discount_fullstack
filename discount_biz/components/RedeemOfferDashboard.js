@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { PageHeader, PageContainer, ContentContainer } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useRedemption } from '@/hooks/useRedemption';
 import { 
@@ -659,7 +660,7 @@ const ClaimDetailsCard = ({ claimDetails, onRedeem, isRedeeming }) => {
   );
 };
 
-// Main Dashboard Component
+// Main Dashboard Component with Navigation
 const RedeemDashboard = () => {
   const { user } = useAuth();
   const {
@@ -679,27 +680,31 @@ const RedeemDashboard = () => {
   // Authentication checks
   if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4">
-        <Alert className="max-w-md border-red-200 bg-red-50">
-          <AlertCircle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="text-red-800">
-            Please log in to access the redemption dashboard.
-          </AlertDescription>
-        </Alert>
-      </div>
+      <PageContainer>
+        <div className="flex items-center justify-center min-h-screen p-4">
+          <Alert className="max-w-md border-red-200 bg-red-50">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800">
+              Please log in to access the redemption dashboard.
+            </AlertDescription>
+          </Alert>
+        </div>
+      </PageContainer>
     );
   }
 
   if (!user.is_business) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-50 flex items-center justify-center p-4">
-        <Alert className="max-w-md border-yellow-200 bg-yellow-50">
-          <AlertCircle className="h-4 w-4 text-yellow-600" />
-          <AlertDescription className="text-yellow-800">
-            Business account required to access redemption features.
-          </AlertDescription>
-        </Alert>
-      </div>
+      <PageContainer>
+        <div className="flex items-center justify-center min-h-screen p-4">
+          <Alert className="max-w-md border-yellow-200 bg-yellow-50">
+            <AlertCircle className="h-4 w-4 text-yellow-600" />
+            <AlertDescription className="text-yellow-800">
+              Business account required to access redemption features.
+            </AlertDescription>
+          </Alert>
+        </div>
+      </PageContainer>
     );
   }
 
@@ -713,33 +718,25 @@ const RedeemDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-yellow-50 p-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                Redeem Customer Offers
-              </h1>
-              <p className="text-gray-600">
-                Verify and process customer redemptions in real-time
-              </p>
-            </div>
-            
-            {hasClaimDetails && (
-              <Button 
-                variant="outline" 
-                onClick={reset} 
-                className="mt-4 sm:mt-0 flex items-center gap-2 border-green-200 hover:bg-green-50"
-              >
-                <RefreshCw className="h-4 w-4" />
-                New Claim
-              </Button>
-            )}
-          </div>
-        </div>
+    <PageContainer>
+      <PageHeader
+        title="Redeem Customer Offers"
+        subtitle="Verify and process customer redemptions in real-time"
+        backUrl="/dashboard"
+      >
+        {hasClaimDetails && (
+          <Button 
+            variant="outline" 
+            onClick={reset} 
+            className="flex items-center gap-2 border-green-200 hover:bg-green-50"
+          >
+            <RefreshCw className="h-4 w-4" />
+            New Claim
+          </Button>
+        )}
+      </PageHeader>
 
+      <ContentContainer>
         {/* Success Message */}
         {success && (
           <Alert className="mb-6 border-green-200 bg-green-50">
@@ -867,8 +864,8 @@ const RedeemDashboard = () => {
             )}
           </div>
         </div>
-      </div>
-    </div>
+      </ContentContainer>
+    </PageContainer>
   );
 };
 
