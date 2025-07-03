@@ -1,6 +1,6 @@
 # app/schemas/business.py
 from pydantic import BaseModel, Field, ConfigDict, field_validator
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 from datetime import datetime
 from decimal import Decimal
 import uuid
@@ -242,6 +242,7 @@ class OfferListResponse(BaseModel):
 # BUSINESS USER REGISTRATION
 # ============================================================================
 
+# In discount_api/app/schemas/business.py
 class BusinessUserRegistration(BaseModel):
     """Combined user + business registration"""
     # User fields
@@ -261,21 +262,36 @@ class BusinessUserRegistration(BaseModel):
     business_hours: Optional[Dict[str, Any]] = None
     category_id: Optional[uuid.UUID] = None
     
-    # NEW: Location fields from address autocomplete
-    latitude: Optional[float] = Field(None, ge=-90, le=90)
-    longitude: Optional[float] = Field(None, ge=-180, le=180)
-    formatted_address: Optional[str] = Field(None, max_length=500)
-    place_id: Optional[str] = Field(None, max_length=255)
-    address_components: Optional[Dict[str, Any]] = None
+    # Location fields - SIMPLIFIED
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    formatted_address: Optional[str] = None
+    place_id: Optional[str] = None
+    address_components: Optional[Any] = None  # Accept anything for now
+    
+    # Handle phone_number mapping
+    phone_number: Optional[str] = None
 
     @field_validator('business_website')
     @classmethod
     def validate_website(cls, v):
-        if v and not v.startswith(('http://', 'https://')):
-            raise ValueError('Website must start with http:// or https://')
+        if not v or str(v).strip() == "":
+            return None
+        
+        v = str(v).strip()
+        if not v.startswith(('http://', 'https://')):
+            return f"https://{v}"
         return v
 
-
+    # Simplified validator
+    @field_validator('address_components', mode='before')
+    @classmethod
+    def validate_address_components(cls, v):
+        # Just return None for anything that's not a proper dict
+        if isinstance(v, dict):
+            return v
+        return None
+        
 # ============================================================================
 # GENERIC RESPONSES
 # ============================================================================

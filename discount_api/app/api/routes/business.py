@@ -600,17 +600,13 @@ async def register_business(
             detail=f"Business registration failed: {str(e)}"
         )
 
+
 @router.post("/register-complete", response_model=dict)
 async def register_business_user_complete(
     registration_data: BusinessUserRegistration
 ):
-    """Complete user + business registration with location data (from signup page)"""
-    
     try:
         print(f"Complete registration request: {registration_data.email}")
-        
-        # Import auth utilities
-        from app.utils.auth import create_access_token, get_password_hash
         
         # Check if user already exists
         existing_user = supabase_admin.table("profiles").select("email").eq("email", registration_data.email).execute()
@@ -621,7 +617,66 @@ async def register_business_user_complete(
                 detail="Email already registered"
             )
         
-        # Validate category exists if provided
+        # Create user with Supabase Auth
+        auth_response = supabase_admin.auth.admin.create_user({
+            "email": registration_data.email,
+            "password": registration_data.password,
+            "email_confirm": True
+        })
+        
+        if not auth_response.user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to create user account"
+            )
+        
+        user_id = auth_response.user.id
+        print(f"✅ Supabase Auth user created: {user_id}")
+        
+        # Check if profile was auto-created by a trigger
+        existing_profile = supabase_admin.table("profiles").select("*").eq("id", user_id).execute()
+        
+        if existing_profile.data:
+            # Profile exists, update it instead of creating
+            print("Profile already exists, updating it...")
+            update_data = {
+                "first_name": registration_data.first_name,
+                "last_name": registration_data.last_name,
+                "phone": registration_data.phone or registration_data.phone_number,
+                "is_business": True,
+                "is_active": True
+            }
+            
+            user_result = supabase_admin.table("profiles").update(update_data).eq("id", user_id).execute()
+            print(f"✅ Profile updated: {user_result.data}")
+        else:
+            # Profile doesn't exist, create it
+            print("Creating new profile...")
+            user_data = {
+                "id": user_id,
+                "email": registration_data.email,
+                "first_name": registration_data.first_name,
+                "last_name": registration_data.last_name,
+                "phone": registration_data.phone or registration_data.phone_number,
+                "is_business": True,
+                "is_active": True
+            }
+            
+            user_result = supabase_admin.table("profiles").insert(user_data).execute()
+            print(f"✅ Profile created: {user_result.data}")
+        
+        if not user_result.data:
+            # Rollback: delete the auth user
+            try:
+                supabase_admin.auth.admin.delete_user(user_id)
+            except:
+                pass
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user profile"
+            )
+        
+        # Validate category if provided
         if registration_data.category_id:
             category_check = supabase_admin.table("categories").select("id").eq("id", str(registration_data.category_id)).execute()
             if not category_check.data:
@@ -630,43 +685,20 @@ async def register_business_user_complete(
                     detail="Invalid category ID"
                 )
         
-        # Create user profile first
-        user_id = str(uuid.uuid4())
-        hashed_password = get_password_hash(registration_data.password)
-        
-        user_data = {
-            "id": user_id,
-            "email": registration_data.email,
-            "password_hash": hashed_password,
-            "first_name": registration_data.first_name,
-            "last_name": registration_data.last_name,
-            "phone": registration_data.phone,
-            "is_business": True,  # Mark as business user
-            "is_active": True
-        }
-        
-        user_result = supabase_admin.table("profiles").insert(user_data).execute()
-        
-        if not user_result.data:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create user profile"
-            )
-        
-        # Create business profile with location data
+        # Create business profile
         business_data = {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
             "business_name": registration_data.business_name,
             "business_description": registration_data.business_description,
             "business_address": registration_data.business_address,
-            "phone_number": registration_data.business_phone,  # Map to phone_number
+            "phone_number": registration_data.business_phone or registration_data.phone_number,
             "business_website": registration_data.business_website,
             "avatar_url": registration_data.avatar_url,
             "business_hours": registration_data.business_hours,
             "category_id": str(registration_data.category_id) if registration_data.category_id else None,
             
-            # NEW: Location fields
+            # Location fields
             "latitude": registration_data.latitude,
             "longitude": registration_data.longitude,
             "formatted_address": registration_data.formatted_address,
@@ -676,37 +708,33 @@ async def register_business_user_complete(
             "is_verified": False
         }
         
-        # Convert data for Supabase
+        print("Creating business...")
         business_data = prepare_data_for_supabase(business_data)
-        
         business_result = supabase_admin.table("businesses").insert(business_data).execute()
+        print(f"✅ Business created: {business_result.data}")
         
         if not business_result.data:
-            # Rollback user creation if business creation fails
-            supabase_admin.table("profiles").delete().eq("id", user_id).execute()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create business profile"
             )
         
-        # Generate JWT token
-        access_token = create_access_token(data={"sub": registration_data.email})
-        
-        # Return user data for frontend
-        user_response = {
-            "id": user_id,
-            "email": registration_data.email,
-            "first_name": registration_data.first_name,
-            "last_name": registration_data.last_name,
-            "phone": registration_data.phone,
-            "is_business": True,
-            "is_active": True
-        }
+        # Generate token
+        from app.core.security import create_access_token
+        access_token = create_access_token(subject=registration_data.email)
         
         return {
             "access_token": access_token,
             "token_type": "bearer",
-            "user": user_response,
+            "user": {
+                "id": user_id,
+                "email": registration_data.email,
+                "first_name": registration_data.first_name,
+                "last_name": registration_data.last_name,
+                "phone": registration_data.phone or registration_data.phone_number,
+                "is_business": True,
+                "is_active": True
+            },
             "message": "Registration successful"
         }
         
@@ -720,49 +748,9 @@ async def register_business_user_complete(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Registration failed: {str(e)}"
         )
-# ============================================================================
-# PRODUCT-OFFER RELATIONSHIP
-# ============================================================================
 
-@router.get("/products/{product_id}/offers", response_model=dict)
-async def get_product_offers(
-    product_id: str,
-    current_user: UserProfile = Depends(get_current_business_user)
-):
-    """Get all offers for a specific product"""
-    
-    try:
-        # Get user's business
-        business_result = supabase_admin.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
-        
-        if not business_result.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Business not found"
-            )
-        
-        business_id = business_result.data[0]["id"]
-        
-        # Verify product belongs to business
-        product_check = supabase_admin.table("products").select("id").eq("id", product_id).eq("business_id", business_id).execute()
-        if not product_check.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Product not found"
-            )
-        
-        # Get offers for this product
-        result = supabase_admin.table("offers").select("*").eq("product_id", product_id).eq("business_id", business_id).execute()
-        
-        return {"offers": result.data}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve product offers: {str(e)}"
-        )
+
+# Location
 
 
 # app/api/routes/business.py - Add these offer endpoints to the existing file

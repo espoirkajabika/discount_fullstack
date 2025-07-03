@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { registerBusinessUser } from "@/lib/auth";
-import AddressAutocomplete from "@/components/AddressAutoComplete";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 
 // Import shadcn components
 import { Button } from "@/components/ui/button";
@@ -159,72 +159,78 @@ export default function BusinessSignup() {
     return true;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // In your signup page handleSubmit function
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  if (!validateForm()) {
+    return;
+  }
 
-    if (!validateForm()) {
-      return;
-    }
+  setIsLoading(true);
+  setError('');
 
-    setIsLoading(true);
-    setError("");
-
-    try {
-      // Prepare data for API (remove confirmPassword and format for API)
-      const { confirmPassword, ...dataToSend } = formData;
-
-      // Map business_phone to phone_number if provided
-      if (dataToSend.business_phone) {
-        dataToSend.phone_number = dataToSend.business_phone;
-        delete dataToSend.business_phone;
+  try {
+    // Prepare data for API (remove confirmPassword and format for API)
+    const { confirmPassword, ...dataToSend } = formData;
+    
+    // Helper function to clean null-like values
+    const cleanValue = (value) => {
+      if (value === null || value === undefined || value === "" || value === "null" || value === "undefined") {
+        return null;
       }
+      return value;
+    };
+    
+    // FIXED: Properly clean all location-related fields
+    const cleanedData = {
+      email: dataToSend.email,
+      password: dataToSend.password,
+      first_name: cleanValue(dataToSend.first_name),
+      last_name: cleanValue(dataToSend.last_name),
+      phone: cleanValue(dataToSend.phone),
+      
+      // Business fields
+      business_name: dataToSend.business_name,
+      business_description: cleanValue(dataToSend.business_description),
+      business_address: cleanValue(dataToSend.business_address),
+      business_phone: cleanValue(dataToSend.business_phone),
+      business_website: cleanValue(dataToSend.business_website),
+      avatar_url: cleanValue(dataToSend.avatar_url),
+      business_hours: cleanValue(dataToSend.business_hours),
+      category_id: cleanValue(dataToSend.category_id),
+      
+      // Location fields - ensure they're properly null if not set
+      latitude: cleanValue(dataToSend.latitude),
+      longitude: cleanValue(dataToSend.longitude),
+      formatted_address: cleanValue(dataToSend.formatted_address),
+      place_id: cleanValue(dataToSend.place_id),
+      address_components: cleanValue(dataToSend.address_components),
+      
+      // Phone number mapping
+      phone_number: cleanValue(dataToSend.business_phone) || cleanValue(dataToSend.phone),
+    };
 
-      // Ensure category_id is properly formatted
-      if (dataToSend.category_id) {
-        dataToSend.category_id = dataToSend.category_id;
-      } else {
-        delete dataToSend.category_id; // Remove if null/undefined
+    // Remove fields that are null to avoid validation issues
+    Object.keys(cleanedData).forEach(key => {
+      if (cleanedData[key] === null || cleanedData[key] === undefined) {
+        delete cleanedData[key];
       }
+    });
 
-      console.log("Sending registration data:", dataToSend); // Debug log
+    console.log('Sending cleaned registration data:', cleanedData); // Debug log
 
-      const result = await registerBusinessUser(dataToSend);
-
-      if (result.error) {
-        // Handle different types of errors
-        if (typeof result.error === "object") {
-          // If it's a validation error object from FastAPI
-          if (result.error.detail) {
-            if (Array.isArray(result.error.detail)) {
-              // Handle FastAPI validation errors
-              const errorMessages = result.error.detail
-                .map((err) => `${err.loc[1]}: ${err.msg}`)
-                .join(", ");
-              setError(`Validation errors: ${errorMessages}`);
-            } else {
-              setError(result.error.detail);
-            }
-          } else {
-            setError(
-              "Registration failed. Please check your information and try again."
-            );
-          }
-        } else {
-          setError(result.error);
-        }
-        return;
-      }
-
-      // Redirect to dashboard on successful registration
-      router.push("/dashboard");
-    } catch (err) {
-      console.error("Signup error:", err);
-      setError("Failed to create account. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+    const result = await registerBusinessUser(cleanedData);
+    
+    // ... rest of error handling
+    
+  } catch (err) {
+    console.error('Signup error:', err);
+    setError('Failed to create account. Please try again.');
+  } finally {
+    setIsLoading(false);
+  }
+};
   // Calculate progress based on active tab
   const getProgress = () => {
     switch (activeTab) {
