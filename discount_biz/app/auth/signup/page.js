@@ -1,65 +1,113 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { registerBusinessUser } from '@/lib/auth';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { registerBusinessUser } from "@/lib/auth";
+import AddressAutocomplete from "@/components/AddressAutoComplete";
 
 // Import shadcn components
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Progress } from '@/components/ui/progress';
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 
 // Icons
-import { EyeOff, Eye, Lock, Building2, User, Mail, Phone, MapPin, Globe, ArrowLeft, ArrowRight } from 'lucide-react';
+import {
+  EyeOff,
+  Eye,
+  Lock,
+  Building2,
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Globe,
+  ArrowLeft,
+  ArrowRight,
+} from "lucide-react";
 
 export default function BusinessSignup() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     // User fields
-    email: '',
-    password: '',
-    confirmPassword: '',
-    first_name: '',
-    last_name: '',
-    phone: '',
-    
+    email: "",
+    password: "",
+    confirmPassword: "",
+    first_name: "",
+    last_name: "",
+    phone: "",
+
     // Business fields
-    business_name: '',
-    business_description: '',
-    business_address: '',
-    business_phone: '',
-    business_website: '',
-    avatar_url: '',
+    business_name: "",
+    business_description: "",
+    business_address: "",
+    business_phone: "",
+    business_website: "",
+    avatar_url: "",
     business_hours: null,
-    category_id: null
+    category_id: null,
+    // New location fields
+    latitude: null,
+    longitude: null,
+    formatted_address: "",
+    place_id: "",
+    address_components: null,
   });
-  
+
+  const handleLocationSelect = (locationData) => {
+    setFormData((prev) => ({
+      ...prev,
+      business_address: locationData.address,
+      formatted_address: locationData.address,
+      latitude: locationData.latitude,
+      longitude: locationData.longitude,
+      place_id: locationData.place_id,
+      address_components: locationData.address_components,
+    }));
+  };
+
   const [categories, setCategories] = useState([]);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('account');
+  const [activeTab, setActiveTab] = useState("account");
   const [showPassword, setShowPassword] = useState({
     password: false,
-    confirmPassword: false
+    confirmPassword: false,
   });
 
   const loadCategories = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'}/categories/`);
+      const response = await fetch(
+        `${
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/api/v1"
+        }/categories/`
+      );
       if (response.ok) {
         const categoriesData = await response.json();
         setCategories(categoriesData);
       }
     } catch (error) {
-      console.error('Failed to load categories:', error);
+      console.error("Failed to load categories:", error);
     }
   };
 
@@ -70,41 +118,41 @@ export default function BusinessSignup() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const handleCategoryChange = (value) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      category_id: value
+      category_id: value,
     }));
   };
 
   const togglePasswordVisibility = (field) => {
-    setShowPassword(prev => ({
+    setShowPassword((prev) => ({
       ...prev,
-      [field]: !prev[field]
+      [field]: !prev[field],
     }));
   };
 
   const validateForm = () => {
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setActiveTab('account');
+      setError("Passwords do not match");
+      setActiveTab("account");
       return false;
     }
 
     if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
-      setActiveTab('account');
+      setError("Password must be at least 6 characters long");
+      setActiveTab("account");
       return false;
     }
 
     if (!formData.email || !formData.business_name) {
-      setError('Email and business name are required');
+      setError("Email and business name are required");
       return false;
     }
 
@@ -113,18 +161,18 @@ export default function BusinessSignup() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
 
     setIsLoading(true);
-    setError('');
+    setError("");
 
     try {
       // Prepare data for API (remove confirmPassword and format for API)
       const { confirmPassword, ...dataToSend } = formData;
-      
+
       // Map business_phone to phone_number if provided
       if (dataToSend.business_phone) {
         dataToSend.phone_number = dataToSend.business_phone;
@@ -138,36 +186,40 @@ export default function BusinessSignup() {
         delete dataToSend.category_id; // Remove if null/undefined
       }
 
-      console.log('Sending registration data:', dataToSend); // Debug log
+      console.log("Sending registration data:", dataToSend); // Debug log
 
       const result = await registerBusinessUser(dataToSend);
-      
+
       if (result.error) {
         // Handle different types of errors
-        if (typeof result.error === 'object') {
+        if (typeof result.error === "object") {
           // If it's a validation error object from FastAPI
           if (result.error.detail) {
             if (Array.isArray(result.error.detail)) {
               // Handle FastAPI validation errors
-              const errorMessages = result.error.detail.map(err => `${err.loc[1]}: ${err.msg}`).join(', ');
+              const errorMessages = result.error.detail
+                .map((err) => `${err.loc[1]}: ${err.msg}`)
+                .join(", ");
               setError(`Validation errors: ${errorMessages}`);
             } else {
               setError(result.error.detail);
             }
           } else {
-            setError('Registration failed. Please check your information and try again.');
+            setError(
+              "Registration failed. Please check your information and try again."
+            );
           }
         } else {
           setError(result.error);
         }
         return;
       }
-      
+
       // Redirect to dashboard on successful registration
-      router.push('/dashboard');
+      router.push("/dashboard");
     } catch (err) {
-      console.error('Signup error:', err);
-      setError('Failed to create account. Please try again.');
+      console.error("Signup error:", err);
+      setError("Failed to create account. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -176,10 +228,14 @@ export default function BusinessSignup() {
   // Calculate progress based on active tab
   const getProgress = () => {
     switch (activeTab) {
-      case 'account': return 33;
-      case 'business': return 66;
-      case 'details': return 100;
-      default: return 33;
+      case "account":
+        return 33;
+      case "business":
+        return 66;
+      case "details":
+        return 100;
+      default:
+        return 33;
     }
   };
 
@@ -191,8 +247,12 @@ export default function BusinessSignup() {
           <div className="mx-auto w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mb-4">
             <Building2 className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Join Discount Business</h1>
-          <p className="text-gray-600">Create your business account and start offering deals</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Join Discount Business
+          </h1>
+          <p className="text-gray-600">
+            Create your business account and start offering deals
+          </p>
         </div>
 
         <Card className="rounded-2xl shadow-xl bg-ivory border-0">
@@ -201,50 +261,82 @@ export default function BusinessSignup() {
               Create Business Account
             </CardTitle>
             <CardDescription className="text-gray-600 mb-4">
-              Already have an account?{' '}
-              <Link 
-                href="/auth/login" 
+              Already have an account?{" "}
+              <Link
+                href="/auth/login"
                 className="text-green-600 font-semibold hover:text-green-700 hover:underline"
               >
                 Sign in
               </Link>
             </CardDescription>
-            
+
             {/* Progress Bar */}
             <div className="w-full max-w-md mx-auto">
               <Progress value={getProgress()} className="h-2 bg-gray-200" />
               <div className="flex justify-between text-xs text-gray-500 mt-2">
-                <span className={activeTab === 'account' ? 'text-green-600 font-medium' : ''}>Account</span>
-                <span className={activeTab === 'business' ? 'text-green-600 font-medium' : ''}>Business</span>
-                <span className={activeTab === 'details' ? 'text-green-600 font-medium' : ''}>Details</span>
+                <span
+                  className={
+                    activeTab === "account" ? "text-green-600 font-medium" : ""
+                  }
+                >
+                  Account
+                </span>
+                <span
+                  className={
+                    activeTab === "business" ? "text-green-600 font-medium" : ""
+                  }
+                >
+                  Business
+                </span>
+                <span
+                  className={
+                    activeTab === "details" ? "text-green-600 font-medium" : ""
+                  }
+                >
+                  Details
+                </span>
               </div>
             </div>
           </CardHeader>
 
           <CardContent className="px-8 pb-8">
             {error && (
-              <Alert variant="destructive" className="mb-6 bg-red-50 border-red-200">
-                <AlertDescription className="text-red-800">{error}</AlertDescription>
+              <Alert
+                variant="destructive"
+                className="mb-6 bg-red-50 border-red-200"
+              >
+                <AlertDescription className="text-red-800">
+                  {error}
+                </AlertDescription>
               </Alert>
             )}
 
             <form onSubmit={handleSubmit}>
-              <Tabs 
-                defaultValue="account" 
-                value={activeTab} 
+              <Tabs
+                defaultValue="account"
+                value={activeTab}
                 onValueChange={setActiveTab}
                 className="w-full"
               >
                 <TabsList className="grid w-full grid-cols-3 bg-gray-100 p-1 rounded-lg">
-                  <TabsTrigger value="account" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">
+                  <TabsTrigger
+                    value="account"
+                    className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
+                  >
                     <User className="h-4 w-4 mr-2" />
                     Account
                   </TabsTrigger>
-                  <TabsTrigger value="business" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">
+                  <TabsTrigger
+                    value="business"
+                    className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
+                  >
                     <Building2 className="h-4 w-4 mr-2" />
                     Business
                   </TabsTrigger>
-                  <TabsTrigger value="details" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">
+                  <TabsTrigger
+                    value="details"
+                    className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
+                  >
                     <MapPin className="h-4 w-4 mr-2" />
                     Details
                   </TabsTrigger>
@@ -253,11 +345,17 @@ export default function BusinessSignup() {
                 <TabsContent value="account" className="space-y-6 mt-6">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="first_name" className="text-gray-700 font-semibold text-sm">
+                      <Label
+                        htmlFor="first_name"
+                        className="text-gray-700 font-semibold text-sm"
+                      >
                         First Name
                       </Label>
                       <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <User
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                          size={18}
+                        />
                         <Input
                           id="first_name"
                           name="first_name"
@@ -271,11 +369,17 @@ export default function BusinessSignup() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="last_name" className="text-gray-700 font-semibold text-sm">
+                      <Label
+                        htmlFor="last_name"
+                        className="text-gray-700 font-semibold text-sm"
+                      >
                         Last Name
                       </Label>
                       <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <User
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                          size={18}
+                        />
                         <Input
                           id="last_name"
                           name="last_name"
@@ -290,11 +394,17 @@ export default function BusinessSignup() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="email" className="text-gray-700 font-semibold text-sm">
+                    <Label
+                      htmlFor="email"
+                      className="text-gray-700 font-semibold text-sm"
+                    >
                       Email address *
                     </Label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                      <Mail
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                        size={18}
+                      />
                       <Input
                         id="email"
                         name="email"
@@ -310,11 +420,17 @@ export default function BusinessSignup() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="phone" className="text-gray-700 font-semibold text-sm">
+                    <Label
+                      htmlFor="phone"
+                      className="text-gray-700 font-semibold text-sm"
+                    >
                       Phone Number
                     </Label>
                     <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                      <Phone
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                        size={18}
+                      />
                       <Input
                         id="phone"
                         name="phone"
@@ -329,18 +445,21 @@ export default function BusinessSignup() {
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="password" className="text-gray-700 font-semibold text-sm">
+                      <Label
+                        htmlFor="password"
+                        className="text-gray-700 font-semibold text-sm"
+                      >
                         Password *
                       </Label>
                       <div className="relative">
-                        <Lock 
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" 
-                          size={18} 
+                        <Lock
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                          size={18}
                         />
                         <Input
                           id="password"
                           name="password"
-                          type={showPassword.password ? 'text' : 'password'}
+                          type={showPassword.password ? "text" : "password"}
                           autoComplete="new-password"
                           required
                           value={formData.password}
@@ -350,28 +469,37 @@ export default function BusinessSignup() {
                         />
                         <button
                           type="button"
-                          onClick={() => togglePasswordVisibility('password')}
+                          onClick={() => togglePasswordVisibility("password")}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                           tabIndex={-1}
                         >
-                          {showPassword.password ? <EyeOff size={18} /> : <Eye size={18} />}
+                          {showPassword.password ? (
+                            <EyeOff size={18} />
+                          ) : (
+                            <Eye size={18} />
+                          )}
                         </button>
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="confirmPassword" className="text-gray-700 font-semibold text-sm">
+                      <Label
+                        htmlFor="confirmPassword"
+                        className="text-gray-700 font-semibold text-sm"
+                      >
                         Confirm Password *
                       </Label>
                       <div className="relative">
-                        <Lock 
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" 
-                          size={18} 
+                        <Lock
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                          size={18}
                         />
                         <Input
                           id="confirmPassword"
                           name="confirmPassword"
-                          type={showPassword.confirmPassword ? 'text' : 'password'}
+                          type={
+                            showPassword.confirmPassword ? "text" : "password"
+                          }
                           autoComplete="new-password"
                           required
                           value={formData.confirmPassword}
@@ -381,21 +509,27 @@ export default function BusinessSignup() {
                         />
                         <button
                           type="button"
-                          onClick={() => togglePasswordVisibility('confirmPassword')}
+                          onClick={() =>
+                            togglePasswordVisibility("confirmPassword")
+                          }
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                           tabIndex={-1}
                         >
-                          {showPassword.confirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          {showPassword.confirmPassword ? (
+                            <EyeOff size={18} />
+                          ) : (
+                            <Eye size={18} />
+                          )}
                         </button>
                       </div>
                     </div>
                   </div>
 
                   <div className="flex justify-end mt-8">
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       className="bg-green-600 hover:bg-green-700 text-white px-8 h-12 rounded-lg"
-                      onClick={() => setActiveTab('business')}
+                      onClick={() => setActiveTab("business")}
                     >
                       Next Step
                       <ArrowRight className="ml-2 h-4 w-4" />
@@ -405,11 +539,17 @@ export default function BusinessSignup() {
 
                 <TabsContent value="business" className="space-y-6 mt-6">
                   <div className="space-y-2">
-                    <Label htmlFor="business_name" className="text-gray-700 font-semibold text-sm">
+                    <Label
+                      htmlFor="business_name"
+                      className="text-gray-700 font-semibold text-sm"
+                    >
                       Business Name *
                     </Label>
                     <div className="relative">
-                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                      <Building2
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                        size={18}
+                      />
                       <Input
                         id="business_name"
                         name="business_name"
@@ -424,7 +564,10 @@ export default function BusinessSignup() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="business_description" className="text-gray-700 font-semibold text-sm">
+                    <Label
+                      htmlFor="business_description"
+                      className="text-gray-700 font-semibold text-sm"
+                    >
                       Business Description
                     </Label>
                     <Textarea
@@ -439,10 +582,16 @@ export default function BusinessSignup() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="category_id" className="text-gray-700 font-semibold text-sm">
+                    <Label
+                      htmlFor="category_id"
+                      className="text-gray-700 font-semibold text-sm"
+                    >
                       Business Category
                     </Label>
-                    <Select value={formData.category_id} onValueChange={handleCategoryChange}>
+                    <Select
+                      value={formData.category_id}
+                      onValueChange={handleCategoryChange}
+                    >
                       <SelectTrigger className="h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg">
                         <SelectValue placeholder="Select a category" />
                       </SelectTrigger>
@@ -458,11 +607,17 @@ export default function BusinessSignup() {
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="business_phone" className="text-gray-700 font-semibold text-sm">
+                      <Label
+                        htmlFor="business_phone"
+                        className="text-gray-700 font-semibold text-sm"
+                      >
                         Business Phone
                       </Label>
                       <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <Phone
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                          size={18}
+                        />
                         <Input
                           id="business_phone"
                           name="business_phone"
@@ -476,11 +631,17 @@ export default function BusinessSignup() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="business_website" className="text-gray-700 font-semibold text-sm">
+                      <Label
+                        htmlFor="business_website"
+                        className="text-gray-700 font-semibold text-sm"
+                      >
                         Website
                       </Label>
                       <div className="relative">
-                        <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <Globe
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                          size={18}
+                        />
                         <Input
                           id="business_website"
                           name="business_website"
@@ -495,19 +656,19 @@ export default function BusinessSignup() {
                   </div>
 
                   <div className="flex justify-between mt-8">
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       variant="outline"
                       className="px-8 h-12 rounded-lg border-gray-200 hover:bg-gray-50"
-                      onClick={() => setActiveTab('account')}
+                      onClick={() => setActiveTab("account")}
                     >
                       <ArrowLeft className="mr-2 h-4 w-4" />
                       Previous
                     </Button>
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       className="bg-green-600 hover:bg-green-700 text-white px-8 h-12 rounded-lg"
-                      onClick={() => setActiveTab('details')}
+                      onClick={() => setActiveTab("details")}
                     >
                       Next Step
                       <ArrowRight className="ml-2 h-4 w-4" />
@@ -517,29 +678,52 @@ export default function BusinessSignup() {
 
                 <TabsContent value="details" className="space-y-6 mt-6">
                   <div className="space-y-2">
-                    <Label htmlFor="business_address" className="text-gray-700 font-semibold text-sm">
+                    <Label
+                      htmlFor="business_address"
+                      className="text-gray-700 font-semibold text-sm"
+                    >
                       Business Address
                     </Label>
                     <div className="relative">
-                      <MapPin className="absolute left-3 top-3 text-gray-400" size={18} />
-                      <Textarea
-                        id="business_address"
-                        name="business_address"
-                        rows={3}
-                        value={formData.business_address}
-                        onChange={handleChange}
-                        placeholder="Enter your business address"
-                        className="pl-10 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg resize-none"
+                      <MapPin
+                        className="absolute left-3 top-3 text-gray-400"
+                        size={18}
                       />
+                      <AddressAutocomplete
+                        value={formData.business_address}
+                        onChange={(value) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            business_address: value,
+                          }))
+                        }
+                        onLocationSelect={handleLocationSelect}
+                        placeholder="Enter your business address"
+                        required={false}
+                      />
+
+                      {/* Optional: Show coordinates for verification (remove in production) */}
+                      {formData.latitude && formData.longitude && (
+                        <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                          📍 Coordinates: {formData.latitude.toFixed(6)},{" "}
+                          {formData.longitude.toFixed(6)}
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="avatar_url" className="text-gray-700 font-semibold text-sm">
+                    <Label
+                      htmlFor="avatar_url"
+                      className="text-gray-700 font-semibold text-sm"
+                    >
                       Business Logo URL
                     </Label>
                     <div className="relative">
-                      <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                      <Globe
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                        size={18}
+                      />
                       <Input
                         id="avatar_url"
                         name="avatar_url"
@@ -553,16 +737,16 @@ export default function BusinessSignup() {
                   </div>
 
                   <div className="flex justify-between mt-8">
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       variant="outline"
                       className="px-8 h-12 rounded-lg border-gray-200 hover:bg-gray-50"
-                      onClick={() => setActiveTab('business')}
+                      onClick={() => setActiveTab("business")}
                     >
                       <ArrowLeft className="mr-2 h-4 w-4" />
                       Previous
                     </Button>
-                    <Button 
+                    <Button
                       type="submit"
                       disabled={isLoading}
                       className="bg-green-600 hover:bg-green-700 text-white px-8 h-12 rounded-lg shadow-lg hover:shadow-xl transition-all"
