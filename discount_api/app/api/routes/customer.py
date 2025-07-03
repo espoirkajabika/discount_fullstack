@@ -1120,3 +1120,184 @@ async def get_product_by_id(product_id: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve product: {str(e)}"
         )
+
+
+# offers nearby
+# In discount_api/app/api/routes/customer.py (or add to existing customer routes)
+from fastapi import APIRouter, Query, HTTPException, status
+from typing import Optional
+from app.core.database import supabase_admin
+from app.utils.dependencies import get_current_active_user
+from app.schemas.user import UserProfile
+from decimal import Decimal
+
+router = APIRouter(prefix="/customer", tags=["Customer"])
+
+def convert_decimals_to_float(data):
+    """Convert Decimal fields to float in a dictionary or list"""
+    if isinstance(data, dict):
+        return {key: convert_decimals_to_float(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [convert_decimals_to_float(item) for item in data]
+    elif isinstance(data, Decimal):
+        return float(data)
+    else:
+        return data
+
+@router.get("/offers/nearby", response_model=dict)
+async def get_offers_nearby(
+    lat: float = Query(..., description="User latitude", ge=-90, le=90),
+    lng: float = Query(..., description="User longitude", ge=-180, le=180),
+    radius: float = Query(10.0, description="Search radius in kilometers", gt=0, le=50),
+    limit: int = Query(20, description="Maximum results", gt=0, le=100),
+    category_id: Optional[str] = Query(None, description="Filter by category")
+):
+    """Find offers near a location"""
+    try:
+        print(f"Searching offers near: {lat}, {lng} within {radius}km")
+        
+        # Call the database function
+        result = supabase_admin.rpc('get_nearby_offers', {
+            'user_lat': lat,
+            'user_lng': lng,
+            'search_radius': radius,
+            'result_limit': limit
+        }).execute()
+        
+        offers = result.data or []
+        
+        # Filter by category if specified
+        if category_id and offers:
+            # Get businesses in this category
+            category_businesses = supabase_admin.table("businesses").select("id").eq("category_id", category_id).execute()
+            business_ids = [b["id"] for b in category_businesses.data] if category_businesses.data else []
+            
+            # Filter offers
+            offers = [offer for offer in offers if offer["business_id"] in business_ids]
+        
+        # Convert decimals to floats for JSON serialization
+        offers = convert_decimals_to_float(offers)
+        
+        # Add additional computed fields
+        for offer in offers:
+            # Calculate savings
+            if offer["discount_type"] == "percentage":
+                savings = (offer["original_price"] or 0) * (offer["discount_value"] or 0) / 100
+                offer["savings_amount"] = round(savings, 2)
+                offer["discount_text"] = f"{offer['discount_value']}% off"
+            else:
+                offer["savings_amount"] = offer["discount_value"] or 0
+                offer["discount_text"] = f"${offer['discount_value']} off"
+            
+            # Calculate remaining claims
+            if offer["max_claims"]:
+                offer["remaining_claims"] = max(0, offer["max_claims"] - (offer["current_claims"] or 0))
+                offer["claim_percentage"] = (offer["current_claims"] or 0) / offer["max_claims"] * 100
+            else:
+                offer["remaining_claims"] = None
+                offer["claim_percentage"] = 0
+            
+            # Round distance
+            offer["distance_km"] = round(offer["distance_km"], 2)
+        
+        return {
+            "offers": offers,
+            "search_location": {
+                "latitude": lat,
+                "longitude": lng
+            },
+            "search_radius_km": radius,
+            "total_found": len(offers),
+            "message": f"Found {len(offers)} offers within {radius}km"
+        }
+        
+    except Exception as e:
+        print(f"Error searching offers: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to search offers: {str(e)}"
+        )
+
+@router.post("/offers/search-by-address", response_model=dict)
+async def search_offers_by_address(
+    search_data: dict,
+    radius: float = Query(10.0, description="Search radius in kilometers", gt=0, le=50),
+    limit: int = Query(20, description="Maximum results", gt=0, le=100)
+):
+    """Search offers by address (geocode address first)"""
+    try:
+        address = search_data.get("address", "").strip()
+        if not address:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Address is required"
+            )
+        
+        # Import geocoding utility (you'll need to create this)
+        from app.utils.geocoding import geocode_address
+        
+        # Geocode the address
+        location = await geocode_address(address)
+        if not location:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Could not find location for the provided address"
+            )
+        
+        # Search offers using the geocoded coordinates
+        result = supabase_admin.rpc('get_nearby_offers', {
+            'user_lat': location["latitude"],
+            'user_lng': location["longitude"],
+            'search_radius': radius,
+            'result_limit': limit
+        }).execute()
+        
+        offers = convert_decimals_to_float(result.data or [])
+        
+        return {
+            "offers": offers,
+            "search_address": address,
+            "geocoded_location": location,
+            "search_radius_km": radius,
+            "total_found": len(offers),
+            "message": f"Found {len(offers)} offers near {address}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error searching by address: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to search by address: {str(e)}"
+        )
+
+@router.get("/offers/categories", response_model=dict)
+async def get_offer_categories():
+    """Get all categories that have active offers"""
+    try:
+        # Get categories with active offers
+        result = supabase_admin.rpc('get_categories_with_offers').execute()
+        
+        if not result.data:
+            # Fallback: get all categories
+            categories_result = supabase_admin.table("categories").select("*").order("name").execute()
+            categories = categories_result.data or []
+        else:
+            categories = result.data
+        
+        return {
+            "categories": categories,
+            "total": len(categories)
+        }
+        
+    except Exception as e:
+        print(f"Error getting categories: {e}")
+        # Fallback to simple category list
+        categories_result = supabase_admin.table("categories").select("*").order("name").execute()
+        return {
+            "categories": categories_result.data or [],
+            "total": len(categories_result.data or [])
+        }

@@ -751,7 +751,71 @@ async def register_business_user_complete(
 
 
 # Location
+# Add these to your business.py routes
 
+@router.get("/location", response_model=dict)
+async def get_business_location(
+    current_user: UserProfile = Depends(get_current_business_user)
+):
+    """Get current business location"""
+    try:
+        business_result = supabase_admin.table("businesses").select(
+            "latitude, longitude, business_address, formatted_address, place_id"
+        ).eq("user_id", str(current_user.id)).execute()
+        
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
+        
+        return {"location": business_result.data[0]}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get location: {str(e)}"
+        )
+
+@router.put("/location", response_model=dict)
+async def update_business_location(
+    location_data: dict,
+    current_user: UserProfile = Depends(get_current_business_user)
+):
+    """Update business location"""
+    try:
+        update_data = {
+            "latitude": location_data.get("latitude"),
+            "longitude": location_data.get("longitude"),
+            "business_address": location_data.get("business_address"),
+            "formatted_address": location_data.get("formatted_address"),
+            "place_id": location_data.get("place_id"),
+            "address_components": location_data.get("address_components"),
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        # Remove None values
+        update_data = {k: v for k, v in update_data.items() if v is not None}
+        
+        result = supabase_admin.table("businesses").update(update_data).eq("user_id", str(current_user.id)).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
+        
+        return {"message": "Location updated successfully", "location": result.data[0]}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update location: {str(e)}"
+        )
 
 # app/api/routes/business.py - Add these offer endpoints to the existing file
 
