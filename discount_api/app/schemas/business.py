@@ -42,7 +42,15 @@ class BusinessBase(BaseModel):
     category_id: Optional[uuid.UUID] = None
 
 
+
 class BusinessCreate(BusinessBase):
+    # NEW: Add location fields here too
+    latitude: Optional[float] = Field(None, ge=-90, le=90)
+    longitude: Optional[float] = Field(None, ge=-180, le=180)
+    formatted_address: Optional[str] = Field(None, max_length=500)
+    place_id: Optional[str] = Field(None, max_length=255)
+    address_components: Optional[Dict[str, Any]] = None
+    
     @field_validator('business_website')
     @classmethod
     def validate_website(cls, v):
@@ -252,6 +260,13 @@ class BusinessUserRegistration(BaseModel):
     avatar_url: Optional[str] = None
     business_hours: Optional[Dict[str, Any]] = None
     category_id: Optional[uuid.UUID] = None
+    
+    # NEW: Location fields from address autocomplete
+    latitude: Optional[float] = Field(None, ge=-90, le=90)
+    longitude: Optional[float] = Field(None, ge=-180, le=180)
+    formatted_address: Optional[str] = Field(None, max_length=500)
+    place_id: Optional[str] = Field(None, max_length=255)
+    address_components: Optional[Dict[str, Any]] = None
 
     @field_validator('business_website')
     @classmethod

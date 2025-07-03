@@ -529,10 +529,11 @@ async def get_business_profile(
             detail=f"Failed to retrieve business profile: {str(e)}"
         )
 
+# Update the existing register_business function in business.py
 
 @router.post("/register", response_model=dict)
 async def register_business(
-    business_data: BusinessCreate,
+    business_data: BusinessCreate,  # Now includes location fields
     current_user: UserProfile = Depends(get_current_active_user)
 ):
     """Register a business for the current user"""
@@ -556,10 +557,16 @@ async def register_business(
                     detail="Invalid category ID"
                 )
         
-        # Create business
+        # Create business with location data
         business_dict = business_data.model_dump(exclude_none=True)
         business_dict["user_id"] = str(current_user.id)
         business_dict["id"] = str(uuid.uuid4())
+        
+        # Handle location data logging
+        if business_data.latitude and business_data.longitude:
+            print(f"Saving business with coordinates: {business_data.latitude}, {business_data.longitude}")
+        elif business_data.business_address:
+            print(f"Business address provided without coordinates: {business_data.business_address}")
         
         # Convert UUID objects to strings for Supabase
         business_dict = prepare_data_for_supabase(business_dict)
@@ -581,9 +588,9 @@ async def register_business(
         ).eq("id", result.data[0]["id"]).execute()
         
         # Convert any problematic fields
-        business_data = convert_decimals_to_float(business_with_category.data[0])
+        business_data_response = convert_decimals_to_float(business_with_category.data[0])
         
-        return {"business": BusinessResponse(**business_data)}
+        return {"business": BusinessResponse(**business_data_response)}
         
     except HTTPException:
         raise
@@ -593,7 +600,126 @@ async def register_business(
             detail=f"Business registration failed: {str(e)}"
         )
 
-
+@router.post("/register-complete", response_model=dict)
+async def register_business_user_complete(
+    registration_data: BusinessUserRegistration
+):
+    """Complete user + business registration with location data (from signup page)"""
+    
+    try:
+        print(f"Complete registration request: {registration_data.email}")
+        
+        # Import auth utilities
+        from app.utils.auth import create_access_token, get_password_hash
+        
+        # Check if user already exists
+        existing_user = supabase_admin.table("profiles").select("email").eq("email", registration_data.email).execute()
+        
+        if existing_user.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        
+        # Validate category exists if provided
+        if registration_data.category_id:
+            category_check = supabase_admin.table("categories").select("id").eq("id", str(registration_data.category_id)).execute()
+            if not category_check.data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid category ID"
+                )
+        
+        # Create user profile first
+        user_id = str(uuid.uuid4())
+        hashed_password = get_password_hash(registration_data.password)
+        
+        user_data = {
+            "id": user_id,
+            "email": registration_data.email,
+            "password_hash": hashed_password,
+            "first_name": registration_data.first_name,
+            "last_name": registration_data.last_name,
+            "phone": registration_data.phone,
+            "is_business": True,  # Mark as business user
+            "is_active": True
+        }
+        
+        user_result = supabase_admin.table("profiles").insert(user_data).execute()
+        
+        if not user_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user profile"
+            )
+        
+        # Create business profile with location data
+        business_data = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "business_name": registration_data.business_name,
+            "business_description": registration_data.business_description,
+            "business_address": registration_data.business_address,
+            "phone_number": registration_data.business_phone,  # Map to phone_number
+            "business_website": registration_data.business_website,
+            "avatar_url": registration_data.avatar_url,
+            "business_hours": registration_data.business_hours,
+            "category_id": str(registration_data.category_id) if registration_data.category_id else None,
+            
+            # NEW: Location fields
+            "latitude": registration_data.latitude,
+            "longitude": registration_data.longitude,
+            "formatted_address": registration_data.formatted_address,
+            "place_id": registration_data.place_id,
+            "address_components": registration_data.address_components,
+            
+            "is_verified": False
+        }
+        
+        # Convert data for Supabase
+        business_data = prepare_data_for_supabase(business_data)
+        
+        business_result = supabase_admin.table("businesses").insert(business_data).execute()
+        
+        if not business_result.data:
+            # Rollback user creation if business creation fails
+            supabase_admin.table("profiles").delete().eq("id", user_id).execute()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create business profile"
+            )
+        
+        # Generate JWT token
+        access_token = create_access_token(data={"sub": registration_data.email})
+        
+        # Return user data for frontend
+        user_response = {
+            "id": user_id,
+            "email": registration_data.email,
+            "first_name": registration_data.first_name,
+            "last_name": registration_data.last_name,
+            "phone": registration_data.phone,
+            "is_business": True,
+            "is_active": True
+        }
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": user_response,
+            "message": "Registration successful"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Registration error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}"
+        )
 # ============================================================================
 # PRODUCT-OFFER RELATIONSHIP
 # ============================================================================
