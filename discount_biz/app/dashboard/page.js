@@ -5,32 +5,166 @@ import { BusinessRoute } from '@/components/ProtectedRoute';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarInitials } from '@/components/ui/avatar';
 import { 
   User, 
   Building2, 
   ShoppingBag, 
   Tag, 
   LogOut, 
-  Plus, 
   ArrowRight, 
   BarChart3, 
-  Users, 
   TrendingUp,
   CreditCard,
-  QrCode
+  Loader2,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useState, useEffect } from 'react';
+
+// Import your existing API functions
+import { getOffers } from '@/lib/offers';
+import { getProducts } from '@/lib/products';
+import { redemptionApi } from '@/lib/redemptionApi';
 
 function DashboardContent() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  
+  // State for dashboard statistics
+  const [stats, setStats] = useState({
+    totalProducts: 0,
+    totalOffers: 0,
+    activeOffers: 0,
+    totalClaims: 0,
+    todayRedemptions: 0
+  });
+  
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Handle logout
+  // Fetch dashboard statistics using your existing API functions
+  const fetchDashboardStats = async () => {
+    try {
+      setError(null);
+      console.log('Fetching dashboard statistics...');
+      
+      // Fetch products data
+      const productsResult = await getProducts({ page: 1, limit: 1 });
+      let totalProducts = 0;
+      
+      if (productsResult.success) {
+        totalProducts = productsResult.pagination?.total || 0;
+        console.log('Total products:', totalProducts);
+      } else {
+        console.warn('Failed to fetch products:', productsResult.error);
+      }
+
+      // Fetch offers data with pagination info
+      const offersResult = await getOffers({ page: 1, limit: 100 });
+      let totalOffers = 0;
+      let activeOffers = 0;
+      let totalClaims = 0;
+      
+      if (offersResult.success) {
+        totalOffers = offersResult.pagination?.total || 0;
+        const offers = offersResult.offers || [];
+        
+        console.log('Total offers:', totalOffers);
+        console.log('Offers data:', offers.length, 'offers received');
+        
+        // Calculate active offers (not expired and currently active)
+        const now = new Date();
+        activeOffers = offers.filter(offer => {
+          try {
+            const isActive = offer.is_active === true;
+            const notExpired = new Date(offer.expiry_date) > now;
+            const hasStarted = new Date(offer.start_date) <= now;
+            
+            return isActive && notExpired && hasStarted;
+          } catch (e) {
+            console.warn('Error checking offer status:', e);
+            return false;
+          }
+        }).length;
+
+        // Calculate total claims across all offers
+        totalClaims = offers.reduce((sum, offer) => {
+          try {
+            return sum + (parseInt(offer.current_claims) || 0);
+          } catch (e) {
+            return sum;
+          }
+        }, 0);
+        
+        console.log('Active offers:', activeOffers);
+        console.log('Total claims:', totalClaims);
+      } else {
+        console.warn('Failed to fetch offers:', offersResult.error);
+      }
+
+      // Try to fetch redemption stats (this might fail if the endpoint doesn't exist yet)
+      let todayRedemptions = 0;
+      try {
+        const redemptionStats = await redemptionApi.getRedemptionStats(1); // Last 1 day
+        if (redemptionStats && !redemptionStats.error) {
+          todayRedemptions = redemptionStats.total_redemptions || 0;
+          console.log('Today redemptions:', todayRedemptions);
+        }
+      } catch (e) {
+        console.log('Redemption stats not available yet:', e.message);
+      }
+
+      // Update stats
+      setStats({
+        totalProducts,
+        totalOffers,
+        activeOffers,
+        totalClaims,
+        todayRedemptions
+      });
+
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+      setError('Failed to load dashboard statistics. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load stats on component mount
+  useEffect(() => {
+    if (user && user.is_business) {
+      fetchDashboardStats();
+    } else if (user && !user.is_business) {
+      setError('Business account required to view statistics');
+      setLoading(false);
+    }
+  }, [user]);
+
+  // Handle logout with loading state
   const handleLogout = async () => {
-    await logout();
-    router.push('/auth/login');
+    if (isLoggingOut) return;
+    
+    setIsLoggingOut(true);
+    console.log('Logout button clicked');
+    
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Logout failed:', error);
+      setIsLoggingOut(false);
+    }
+  };
+
+  // Handle refresh
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchDashboardStats();
+    setRefreshing(false);
   };
 
   // Navigation handlers
@@ -44,10 +178,6 @@ function DashboardContent() {
 
   const handleManageOffers = () => {
     router.push('/offers');
-  };
-
-  const handleCreateProduct = () => {
-    router.push('/products/new');
   };
 
   const handleRedeemOffers = () => {
@@ -71,6 +201,18 @@ function DashboardContent() {
             </div>
             
             <div className="flex items-center space-x-4">
+              {/* Refresh Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={refreshing || loading}
+                className="text-gray-600 hover:text-green-600"
+                title="Refresh Statistics"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              </Button>
+
               <div className="flex items-center space-x-3 bg-gray-50 rounded-lg px-3 py-2">
                 <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
                   <User className="h-4 w-4 text-white" />
@@ -83,8 +225,24 @@ function DashboardContent() {
                 </div>
               </div>
               
-              <Button variant="ghost" onClick={handleLogout} className="text-gray-600 hover:text-red-600">
-                <LogOut className="h-4 w-4" />
+              <Button 
+                variant="ghost" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('Header logout button clicked');
+                  handleLogout();
+                }}
+                disabled={isLoggingOut}
+                className="text-gray-600 hover:text-red-600 disabled:opacity-50 px-4 py-3 h-12 min-w-12 rounded-lg hover:bg-red-50"
+                title={isLoggingOut ? "Signing out..." : "Sign out"}
+                type="button"
+              >
+                {isLoggingOut ? (
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                ) : (
+                  <LogOut className="h-6 w-6" />
+                )}
               </Button>
             </div>
           </div>
@@ -103,14 +261,41 @@ function DashboardContent() {
           </p>
         </div>
 
+        {/* Error State */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+              <p className="text-red-800 text-sm">{error}</p>
+            </div>
+            <Button 
+              onClick={handleRefresh}
+              size="sm"
+              variant="outline"
+              className="mt-2 border-red-200 text-red-700 hover:bg-red-100"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        )}
+
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card className="border-0 bg-white shadow-lg">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Active Offers</p>
-                  <p className="text-2xl font-bold text-gray-900">12</p>
+                  {loading ? (
+                    <div className="flex items-center space-x-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                      <p className="text-lg text-gray-400">Loading...</p>
+                    </div>
+                  ) : (
+                    <p className="text-2xl font-bold text-gray-900">{stats.activeOffers}</p>
+                  )}
+                  <p className="text-xs text-green-600 mt-1">Currently available</p>
                 </div>
                 <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
                   <Tag className="h-6 w-6 text-yellow-600" />
@@ -123,8 +308,16 @@ function DashboardContent() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Products</p>
-                  <p className="text-2xl font-bold text-gray-900">45</p>
+                  <p className="text-sm font-medium text-gray-600">Total Products</p>
+                  {loading ? (
+                    <div className="flex items-center space-x-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                      <p className="text-lg text-gray-400">Loading...</p>
+                    </div>
+                  ) : (
+                    <p className="text-2xl font-bold text-gray-900">{stats.totalProducts}</p>
+                  )}
+                  <p className="text-xs text-blue-600 mt-1">In your catalog</p>
                 </div>
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                   <ShoppingBag className="h-6 w-6 text-blue-600" />
@@ -137,11 +330,41 @@ function DashboardContent() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Today's Redemptions</p>
-                  <p className="text-2xl font-bold text-gray-900">8</p>
+                  <p className="text-sm font-medium text-gray-600">Total Claims</p>
+                  {loading ? (
+                    <div className="flex items-center space-x-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                      <p className="text-lg text-gray-400">Loading...</p>
+                    </div>
+                  ) : (
+                    <p className="text-2xl font-bold text-gray-900">{stats.totalClaims}</p>
+                  )}
+                  <p className="text-xs text-green-600 mt-1">Across all offers</p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <CreditCard className="h-6 w-6 text-green-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 bg-white shadow-lg">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Offers</p>
+                  {loading ? (
+                    <div className="flex items-center space-x-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                      <p className="text-lg text-gray-400">Loading...</p>
+                    </div>
+                  ) : (
+                    <p className="text-2xl font-bold text-gray-900">{stats.totalOffers}</p>
+                  )}
+                  <p className="text-xs text-purple-600 mt-1">Ever created</p>
+                </div>
+                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <Tag className="h-6 w-6 text-purple-600" />
                 </div>
               </div>
             </CardContent>
@@ -243,7 +466,6 @@ function DashboardContent() {
                     </div>
                   </Button>
 
-                  {/* NEW: Redeem Offers Button */}
                   <Button 
                     variant="outline" 
                     className="w-full justify-start h-12 border-green-200 hover:bg-green-50"
@@ -255,29 +477,6 @@ function DashboardContent() {
                       <p className="text-xs text-gray-500">Process customer redemptions</p>
                     </div>
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Coming Soon */}
-            <Card className="border-0 bg-gradient-to-br from-gray-50 to-gray-100">
-              <CardHeader>
-                <CardTitle className="text-lg text-gray-700">Coming Soon</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-3 text-gray-500">
-                    <BarChart3 className="h-5 w-5" />
-                    <span className="text-sm">Analytics Dashboard</span>
-                  </div>
-                  <div className="flex items-center space-x-3 text-gray-500">
-                    <Building2 className="h-5 w-5" />
-                    <span className="text-sm">Business Profile Setup</span>
-                  </div>
-                  <div className="flex items-center space-x-3 text-gray-500">
-                    <TrendingUp className="h-5 w-5" />
-                    <span className="text-sm">Performance Reports</span>
-                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -303,7 +502,7 @@ function DashboardContent() {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">Products</p>
-                        <p className="text-xs text-gray-500">Manage catalog</p>
+                        <p className="text-xs text-gray-500">{loading ? 'Loading...' : `${stats.totalProducts} items`}</p>
                       </div>
                     </div>
                     <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-green-600 transition-colors" />
@@ -318,14 +517,13 @@ function DashboardContent() {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">Offers</p>
-                        <p className="text-xs text-gray-500">Create & manage deals</p>
+                        <p className="text-xs text-gray-500">{loading ? 'Loading...' : `${stats.activeOffers} active`}</p>
                       </div>
                     </div>
                     <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-green-600 transition-colors" />
                   </div>
                 </Link>
 
-                {/* NEW: Redemption Link */}
                 <Link href="/dashboard/redeem" className="group">
                   <div className="p-4 rounded-lg border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all duration-200">
                     <div className="flex items-center space-x-3 mb-2">
@@ -334,7 +532,7 @@ function DashboardContent() {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">Redemptions</p>
-                        <p className="text-xs text-gray-500">Process customer claims</p>
+                        <p className="text-xs text-gray-500">{loading ? 'Loading...' : `${stats.totalClaims} claims`}</p>
                       </div>
                     </div>
                     <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-green-600 transition-colors" />

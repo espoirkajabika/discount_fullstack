@@ -116,12 +116,35 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      console.log('Starting logout process...');
+      
+      // Call the auth service logout
       await signOut();
+      
+      console.log('Auth service logout completed');
+      
+      // Clear user state
+      setUser(null);
+      
+      console.log('User state cleared');
+      
+      // Force redirect to login
+      window.location.href = '/auth/login';
+      
     } catch (error) {
       console.error('Logout error:', error);
-    } finally {
+      
+      // Even if logout API call fails, clear local state
       setUser(null);
-      router.push('/auth/login');
+      
+      // Clear localStorage directly as fallback
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+      }
+      
+      // Force redirect to login
+      window.location.href = '/auth/login';
     }
   };
 
