@@ -2,6 +2,7 @@
   "/dashboard/redeem/page": "app/dashboard/redeem/page.js",
   "/dashboard/page": "app/dashboard/page.js",
   "/products/page": "app/products/page.js",
+  "/products/[id]/page": "app/products/[id]/page.js",
   "/offers/page": "app/offers/page.js",
-  "/products/[id]/page": "app/products/[id]/page.js"
+  "/auth/login/page": "app/auth/login/page.js"
 }

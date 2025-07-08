@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from '@/lib/auth';
+import { useAuth } from '@/context/AuthContext';
 
 // Import shadcn components
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,8 @@ import { Mail, Lock, EyeOff, Eye, CheckCircle, Building2 } from 'lucide-react';
 export default function BusinessLogin() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { login } = useAuth(); // Get login function from AuthContext
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -43,9 +46,13 @@ export default function BusinessLogin() {
     setError('');
 
     try {
+      console.log('Starting login process...');
+      
+      // Call the auth service
       const result = await signIn(email, password);
       
       if (result.error) {
+        console.error('Login failed:', result.error);
         setError(result.error);
         return;
       }
@@ -56,11 +63,22 @@ export default function BusinessLogin() {
         return;
       }
 
-      // Redirect to dashboard on successful login
-      router.push('/dashboard');
+      console.log('Login successful, user:', result.user);
+      
+      // IMPORTANT: Update AuthContext with the user data
+      login(result.user);
+      
+      console.log('AuthContext updated, redirecting...');
+      
+      // The AuthContext should now handle the redirect automatically
+      // But we can add a manual redirect as backup
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 100);
+      
     } catch (err) {
-      setError('Failed to sign in. Please check your credentials and try again.');
       console.error('Login error:', err);
+      setError('Failed to sign in. Please check your credentials and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -123,6 +141,7 @@ export default function BusinessLogin() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
                     className="pl-10 h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -153,12 +172,14 @@ export default function BusinessLogin() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
                     className="pl-10 pr-12 h-12 bg-white border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                    disabled={isLoading}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                     tabIndex={-1}
+                    disabled={isLoading}
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
