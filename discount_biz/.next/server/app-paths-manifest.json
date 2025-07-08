@@ -1,10 +1,9 @@
 {
+  "/favicon.ico/route": "app/favicon.ico/route.js",
   "/_not-found/page": "app/_not-found/page.js",
   "/page": "app/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/offers/page": "app/offers/page.js",
-  "/auth/signup/page": "app/auth/signup/page.js",
   "/auth/login/page": "app/auth/login/page.js",
   "/products/page": "app/products/page.js",
-  "/offers/new/page": "app/offers/new/page.js"
+  "/dashboard/page": "app/dashboard/page.js",
+  "/auth/signup/page": "app/auth/signup/page.js"
 }

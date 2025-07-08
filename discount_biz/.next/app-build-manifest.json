@@ -31,16 +31,6 @@
       "static/chunks/main-app.js",
       "static/chunks/app/products/page.js"
     ],
-    "/offers/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/offers/page.js"
-    ],
-    "/offers/new/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/offers/new/page.js"
-    ],
     "/_not-found/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
