@@ -1,8 +1,20 @@
 {
-  "/dashboard/redeem/page": "app/dashboard/redeem/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/products/page": "app/products/page.js",
-  "/products/[id]/page": "app/products/[id]/page.js",
+  "/auth/login/page": "app/auth/login/page.js",
+  "/offers/[id]/edit/page": "app/offers/[id]/edit/page.js",
+  "/dashboard/redeem/page": "app/dashboard/redeem/page.js",
+  "/auth/signup/page": "app/auth/signup/page.js",
+  "/offers/new/page": "app/offers/new/page.js",
+  "/page": "app/page.js",
+  "/offers/analytics/page": "app/offers/analytics/page.js",
+  "/offers/[id]/page": "app/offers/[id]/page.js",
   "/offers/page": "app/offers/page.js",
-  "/auth/login/page": "app/auth/login/page.js"
+  "/products/[id]/edit/page": "app/products/[id]/edit/page.js",
+  "/products/[id]/page": "app/products/[id]/page.js",
+  "/products/new/page": "app/products/new/page.js",
+  "/products/page": "app/products/page.js",
+  "/settings/page": "app/settings/page.js",
+  "/unauthorized/page": "app/unauthorized/page.js"
 }

@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
-import { getSession } from '@/lib/auth';
+// import { getSession } from '@/lib/auth';
 import {
   AlertCircle,
   Upload,
@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 
 // Business hours component (will create separately)
-import BusinessHours from '../../_components/BusinessHours';
+// import BusinessHours from '../../_components/BusinessHours';
 
 export default function BusinessSettingsPage() {
   const router = useRouter();
@@ -71,7 +71,7 @@ export default function BusinessSettingsPage() {
         setIsLoading(true);
         setError('');
         
-        const sessionData = await getSession();
+        // const sessionData = await getSession();
 
         if (!sessionData.authenticated) {
           console.log('Session not authenticated, redirecting to login');
@@ -650,10 +650,10 @@ export default function BusinessSettingsPage() {
                   <div>
                     <h3 className="font-medium mb-4">Business Hours</h3>
                     {/* The BusinessHours component will be created separately */}
-                    <BusinessHours 
+                    {/* <BusinessHours 
                       hours={businessData.business_hours} 
                       onUpdate={handleHoursUpdate} 
-                    />
+                    /> */}
                   </div>
                 </div>
               </CardContent>
