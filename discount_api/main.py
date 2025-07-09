@@ -74,6 +74,11 @@ app.add_middleware(
     allow_origins=[
         "https://discount-fullstack.vercel.app",
         "https://discount-fullstack-6y9dnsfnn-popupreach.vercel.app",
+        "www.popupreach.com",
+        "https://www.popupreach.com",
+        "https://popupreach.com",
+        "http://popupreach.com",
+        "popupreach.com",
         "http://localhost:3000",
         "https://localhost:3000"
     ],

@@ -17,7 +17,11 @@ import {
   CreditCard,
   Loader2,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Phone,
+  Globe,
+  MapPin,
+  Mail
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -42,15 +46,43 @@ function DashboardContent() {
     todayRedemptions: 0
   });
   
+  // State for business profile data
+  const [businessProfile, setBusinessProfile] = useState(null);
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Fetch business profile data
+  const fetchBusinessProfile = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'}/business/profile`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setBusinessProfile(data.business);
+      }
+    } catch (error) {
+      console.error('Error fetching business profile:', error);
+    }
+  };
 
   // Fetch dashboard statistics using your existing API functions
   const fetchDashboardStats = async () => {
     try {
       setError(null);
       console.log('Fetching dashboard statistics...');
+      
+      // Fetch business profile
+      await fetchBusinessProfile();
       
       // Fetch products data
       const productsResult = await getProducts({ page: 1, limit: 1 });
@@ -86,12 +118,12 @@ function DashboardContent() {
             
             return isActive && notExpired && hasStarted;
           } catch (e) {
-            console.warn('Error checking offer status:', e);
+            console.error('Error checking offer dates:', e);
             return false;
           }
         }).length;
 
-        // Calculate total claims across all offers
+        // Calculate total claims
         totalClaims = offers.reduce((sum, offer) => {
           try {
             return sum + (parseInt(offer.current_claims) || 0);
@@ -106,30 +138,19 @@ function DashboardContent() {
         console.warn('Failed to fetch offers:', offersResult.error);
       }
 
-      // Try to fetch redemption stats (this might fail if the endpoint doesn't exist yet)
-      let todayRedemptions = 0;
-      try {
-        const redemptionStats = await redemptionApi.getRedemptionStats(1); // Last 1 day
-        if (redemptionStats && !redemptionStats.error) {
-          todayRedemptions = redemptionStats.total_redemptions || 0;
-          console.log('Today redemptions:', todayRedemptions);
-        }
-      } catch (e) {
-        console.log('Redemption stats not available yet:', e.message);
-      }
-
       // Update stats
       setStats({
         totalProducts,
         totalOffers,
         activeOffers,
         totalClaims,
-        todayRedemptions
+        todayRedemptions: 0 // You can implement this later
       });
 
+      console.log('Dashboard statistics updated successfully');
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
-      setError('Failed to load dashboard statistics. Please try again.');
+      setError('Unable to load dashboard statistics. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -184,6 +205,18 @@ function DashboardContent() {
     router.push('/dashboard/redeem');
   };
 
+  const handleSettings = () => {
+    router.push('/settings');
+  };
+
+  // Get business name for display
+  const getBusinessDisplayName = () => {
+    if (businessProfile?.business_name) {
+      return businessProfile.business_name;
+    }
+    return 'Business';
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-yellow-50">
       {/* Header */}
@@ -213,15 +246,16 @@ function DashboardContent() {
                 <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               </Button>
 
+              {/* Business Profile Display */}
               <div className="flex items-center space-x-3 bg-gray-50 rounded-lg px-3 py-2">
                 <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-                  <User className="h-4 w-4 text-white" />
+                  <Building2 className="h-4 w-4 text-white" />
                 </div>
                 <div className="hidden sm:block">
                   <p className="text-sm font-medium text-gray-900">
-                    {user?.first_name} {user?.last_name}
+                    {getBusinessDisplayName()}
                   </p>
-                  <p className="text-xs text-gray-500">{user?.email}</p>
+                  <p className="text-xs text-gray-500">Admin</p>
                 </div>
               </div>
               
@@ -254,143 +288,264 @@ function DashboardContent() {
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Welcome back, {user?.first_name}!
+            Welcome back, Admin
           </h2>
           <p className="text-gray-600">
             Manage your business offers, products, and customer redemptions from your dashboard.
           </p>
         </div>
 
-        {/* Error State */}
+        {/* Error Display */}
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center space-x-2">
-              <AlertCircle className="h-5 w-5 text-red-600" />
-              <p className="text-red-800 text-sm">{error}</p>
+            <div className="flex items-center">
+              <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+              <p className="text-red-700">{error}</p>
             </div>
-            <Button 
-              onClick={handleRefresh}
-              size="sm"
-              variant="outline"
-              className="mt-2 border-red-200 text-red-700 hover:bg-red-100"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Try Again
-            </Button>
           </div>
         )}
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="border-0 bg-white shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Active Offers</p>
-                  {loading ? (
-                    <div className="flex items-center space-x-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                      <p className="text-lg text-gray-400">Loading...</p>
-                    </div>
-                  ) : (
-                    <p className="text-2xl font-bold text-gray-900">{stats.activeOffers}</p>
-                  )}
-                  <p className="text-xs text-green-600 mt-1">Currently available</p>
-                </div>
-                <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                  <Tag className="h-6 w-6 text-yellow-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Loading State */}
+        {loading && (
+          <div className="flex justify-center items-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+            <span className="ml-2 text-gray-600">Loading dashboard...</span>
+          </div>
+        )}
 
-          <Card className="border-0 bg-white shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Products</p>
-                  {loading ? (
-                    <div className="flex items-center space-x-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                      <p className="text-lg text-gray-400">Loading...</p>
-                    </div>
-                  ) : (
-                    <p className="text-2xl font-bold text-gray-900">{stats.totalProducts}</p>
-                  )}
-                  <p className="text-xs text-blue-600 mt-1">In your catalog</p>
-                </div>
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <ShoppingBag className="h-6 w-6 text-blue-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Main Dashboard Content */}
+        {!loading && !error && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Column - Stats */}
+            <div className="lg:col-span-2 space-y-8">
+              {/* Statistics Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Total Products */}
+                <Card className="border-0 bg-white shadow-lg">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-gray-600">
+                      Total Products
+                    </CardTitle>
+                    <ShoppingBag className="h-4 w-4 text-blue-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-gray-900">{stats.totalProducts}</div>
+                    <p className="text-xs text-gray-500">
+                      Products in your catalog
+                    </p>
+                  </CardContent>
+                </Card>
 
-          <Card className="border-0 bg-white shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Claims</p>
-                  {loading ? (
-                    <div className="flex items-center space-x-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                      <p className="text-lg text-gray-400">Loading...</p>
-                    </div>
-                  ) : (
-                    <p className="text-2xl font-bold text-gray-900">{stats.totalClaims}</p>
-                  )}
-                  <p className="text-xs text-green-600 mt-1">Across all offers</p>
-                </div>
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <CreditCard className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                {/* Total Offers */}
+                <Card className="border-0 bg-white shadow-lg">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-gray-600">
+                      Total Offers
+                    </CardTitle>
+                    <Tag className="h-4 w-4 text-green-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-gray-900">{stats.totalOffers}</div>
+                    <p className="text-xs text-gray-500">
+                      Offers created
+                    </p>
+                  </CardContent>
+                </Card>
 
-          <Card className="border-0 bg-white shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Offers</p>
-                  {loading ? (
-                    <div className="flex items-center space-x-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                      <p className="text-lg text-gray-400">Loading...</p>
-                    </div>
-                  ) : (
-                    <p className="text-2xl font-bold text-gray-900">{stats.totalOffers}</p>
-                  )}
-                  <p className="text-xs text-purple-600 mt-1">Ever created</p>
-                </div>
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <Tag className="h-6 w-6 text-purple-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                {/* Active Offers */}
+                <Card className="border-0 bg-white shadow-lg">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-gray-600">
+                      Active Offers
+                    </CardTitle>
+                    <TrendingUp className="h-4 w-4 text-orange-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-gray-900">{stats.activeOffers}</div>
+                    <p className="text-xs text-gray-500">
+                      Currently active
+                    </p>
+                  </CardContent>
+                </Card>
 
-        {/* Action Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column - Account Info & Quick Actions */}
-          <div className="space-y-6">
-            {/* Account Information */}
-            <Card className="border-0 bg-white shadow-lg">
-              <CardHeader>
-                <CardTitle className="text-lg text-gray-900 flex items-center">
-                  <User className="h-5 w-5 mr-2 text-green-600" />
-                  Account Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
-                      <User className="h-6 w-6 text-white" />
+                {/* Total Claims */}
+                <Card className="border-0 bg-white shadow-lg">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-gray-600">
+                      Total Claims
+                    </CardTitle>
+                    <CreditCard className="h-4 w-4 text-purple-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-gray-900">{stats.totalClaims}</div>
+                    <p className="text-xs text-gray-500">
+                      Customer claims
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Quick Actions */}
+              <Card className="border-0 bg-white shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-lg text-gray-900">Quick Actions</CardTitle>
+                  <CardDescription>
+                    Manage your business operations
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Button 
+                      onClick={handleCreateOffer}
+                      className="w-full justify-start h-12 bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      <Tag className="h-4 w-4 mr-2" />
+                      Create New Offer
+                    </Button>
+                    
+                    <Button 
+                      onClick={handleManageProducts}
+                      variant="outline"
+                      className="w-full justify-start h-12 border-gray-300 hover:border-blue-500 hover:text-blue-600"
+                    >
+                      <ShoppingBag className="h-4 w-4 mr-2" />
+                      Manage Products
+                    </Button>
+                    
+                    <Button 
+                      onClick={handleManageOffers}
+                      variant="outline"
+                      className="w-full justify-start h-12 border-gray-300 hover:border-green-500 hover:text-green-600"
+                    >
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      View All Offers
+                    </Button>
+                    
+                    <Button 
+                      onClick={handleRedeemOffers}
+                      variant="outline"
+                      className="w-full justify-start h-12 border-gray-300 hover:border-purple-500 hover:text-purple-600"
+                    >
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Redeem Offers
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column - Business Profile */}
+            <div className="space-y-8">
+              {/* Business Profile Card */}
+              <Card className="border-0 bg-white shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-lg text-gray-900">Business Profile</CardTitle>
+                  <CardDescription>
+                    Your business information
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {/* Business Name */}
+                    <div className="flex items-start space-x-3">
+                      <Building2 className="h-5 w-5 text-gray-400 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {businessProfile?.business_name || 'Business Name Not Set'}
+                        </p>
+                        <p className="text-xs text-gray-500">Business Name</p>
+                      </div>
+                    </div>
+
+                    {/* Business Description */}
+                    {businessProfile?.business_description && (
+                      <div className="flex items-start space-x-3">
+                        <User className="h-5 w-5 text-gray-400 mt-0.5" />
+                        <div>
+                          <p className="text-sm text-gray-900">
+                            {businessProfile.business_description}
+                          </p>
+                          <p className="text-xs text-gray-500">Description</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Business Address */}
+                    {businessProfile?.business_address && (
+                      <div className="flex items-start space-x-3">
+                        <MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
+                        <div>
+                          <p className="text-sm text-gray-900">
+                            {businessProfile.business_address}
+                          </p>
+                          <p className="text-xs text-gray-500">Address</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Phone Number */}
+                    {businessProfile?.phone_number && (
+                      <div className="flex items-start space-x-3">
+                        <Phone className="h-5 w-5 text-gray-400 mt-0.5" />
+                        <div>
+                          <p className="text-sm text-gray-900">
+                            {businessProfile.phone_number}
+                          </p>
+                          <p className="text-xs text-gray-500">Phone</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Website */}
+                    {businessProfile?.business_website && (
+                      <div className="flex items-start space-x-3">
+                        <Globe className="h-5 w-5 text-gray-400 mt-0.5" />
+                        <div>
+                          <p className="text-sm text-gray-900">
+                            <a 
+                              href={businessProfile.business_website} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                            >
+                              {businessProfile.business_website}
+                            </a>
+                          </p>
+                          <p className="text-xs text-gray-500">Website</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Edit Profile Button */}
+                    {/* <div className="pt-4 border-t">
+                      <Button 
+                        onClick={handleSettings}
+                        variant="outline"
+                        className="w-full justify-center"
+                      >
+                        Edit Business Profile
+                        <ArrowRight className="h-4 w-4 ml-2" />
+                      </Button>
+                    </div> */}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Account Info - Keep original user info for admin reference */}
+              <Card className="border-0 bg-white shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-lg text-gray-900">Account Info</CardTitle>
+                  <CardDescription>
+                    Administrative account details
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center space-x-4 mb-4">
+                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                      <User className="h-6 w-6 text-gray-600" />
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">
+                      <p className="text-sm font-medium text-gray-900">
                         {user?.first_name} {user?.last_name}
                       </p>
                       <p className="text-sm text-gray-500">{user?.email}</p>
@@ -417,150 +572,17 @@ function DashboardContent() {
                       </Badge>
                     )}
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Quick Actions */}
-            <Card className="border-0 bg-white shadow-lg">
-              <CardHeader>
-                <CardTitle className="text-lg text-gray-900">Quick Actions</CardTitle>
-                <CardDescription>
-                  Jump to key areas of your dashboard
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <Button 
-                    className="w-full justify-start h-12 bg-green-600 hover:bg-green-700 text-white"
-                    onClick={handleCreateOffer}
-                  >
-                    <Tag className="h-5 w-5 mr-3" />
-                    <div className="text-left">
-                      <p className="font-medium">Create New Offer</p>
-                      <p className="text-xs opacity-90">Start attracting customers</p>
-                    </div>
-                  </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start h-12 border-gray-200 hover:bg-gray-50"
-                    onClick={handleManageProducts}
-                  >
-                    <ShoppingBag className="h-5 w-5 mr-3 text-blue-600" />
-                    <div className="text-left">
-                      <p className="font-medium">Manage Products</p>
-                      <p className="text-xs text-gray-500">View and edit catalog</p>
-                    </div>
-                  </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start h-12 border-gray-200 hover:bg-gray-50"
-                    onClick={handleManageOffers}
-                  >
-                    <Tag className="h-5 w-5 mr-3 text-yellow-600" />
-                    <div className="text-left">
-                      <p className="font-medium">View All Offers</p>
-                      <p className="text-xs text-gray-500">Manage existing deals</p>
-                    </div>
-                  </Button>
-
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start h-12 border-green-200 hover:bg-green-50"
-                    onClick={handleRedeemOffers}
-                  >
-                    <CreditCard className="h-5 w-5 mr-3 text-green-600" />
-                    <div className="text-left">
-                      <p className="font-medium">Redeem Customer Offers</p>
-                      <p className="text-xs text-gray-500">Process customer redemptions</p>
-                    </div>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </div>
-
-        {/* Bottom Section - Quick Links */}
-        <div className="mt-12">
-          <Card className="border-0 bg-white shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-xl text-gray-900">Quick Navigation</CardTitle>
-              <CardDescription>
-                Access all areas of your business dashboard
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Link href="/products" className="group">
-                  <div className="p-4 rounded-lg border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all duration-200">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <div className="w-10 h-10 bg-blue-100 group-hover:bg-blue-200 rounded-lg flex items-center justify-center transition-colors">
-                        <ShoppingBag className="h-5 w-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">Products</p>
-                        <p className="text-xs text-gray-500">{loading ? 'Loading...' : `${stats.totalProducts} items`}</p>
-                      </div>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-green-600 transition-colors" />
-                  </div>
-                </Link>
-
-                <Link href="/offers" className="group">
-                  <div className="p-4 rounded-lg border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all duration-200">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <div className="w-10 h-10 bg-yellow-100 group-hover:bg-yellow-200 rounded-lg flex items-center justify-center transition-colors">
-                        <Tag className="h-5 w-5 text-yellow-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">Offers</p>
-                        <p className="text-xs text-gray-500">{loading ? 'Loading...' : `${stats.activeOffers} active`}</p>
-                      </div>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-green-600 transition-colors" />
-                  </div>
-                </Link>
-
-                <Link href="/dashboard/redeem" className="group">
-                  <div className="p-4 rounded-lg border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all duration-200">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <div className="w-10 h-10 bg-green-100 group-hover:bg-green-200 rounded-lg flex items-center justify-center transition-colors">
-                        <CreditCard className="h-5 w-5 text-green-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">Redemptions</p>
-                        <p className="text-xs text-gray-500">{loading ? 'Loading...' : `${stats.totalClaims} claims`}</p>
-                      </div>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-green-600 transition-colors" />
-                  </div>
-                </Link>
-
-                <div className="p-4 rounded-lg border border-gray-200 bg-gray-50 opacity-60">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
-                      <BarChart3 className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-400">Analytics</p>
-                      <p className="text-xs text-gray-400">Performance metrics</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-400">Coming Soon</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        )}
       </main>
     </div>
   );
 }
 
-export default function Dashboard() {
+export default function DashboardPage() {
   return (
     <BusinessRoute>
       <DashboardContent />

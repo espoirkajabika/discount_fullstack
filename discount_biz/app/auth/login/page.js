@@ -80,20 +80,20 @@ export default function BusinessLogin() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#0E2F5A] px-4 py-8">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-green-50 to-yellow-50 px-4 py-8">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white mb-4">
-            <Building2 className="h-6 w-6 text-[#0E2F5A]" />
+          <div className="mx-auto w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mb-4">
+            <Building2 className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">Business Login</h1>
-          <p className="text-blue-100">Sign in to your business account</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Business Login</h1>
+          <p className="text-gray-600">Sign in to your business account</p>
         </div>
 
-        <Card className="rounded-xl shadow-xl bg-white">
+        <Card className="rounded-2xl shadow-xl bg-ivory border-0">
           <CardHeader className="text-center pb-4">
-            <CardTitle className="text-xl text-gray-900">Welcome back</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-2xl font-bold text-gray-900">Welcome back</CardTitle>
+            <CardDescription className="text-gray-600">
               Enter your credentials to access your business dashboard
             </CardDescription>
           </CardHeader>
@@ -107,8 +107,8 @@ export default function BusinessLogin() {
               )}
 
               {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
+                <Alert variant="destructive" className="bg-red-50 border-red-200">
+                  <AlertDescription className="text-red-800">{error}</AlertDescription>
                 </Alert>
               )}
 
@@ -170,10 +170,17 @@ export default function BusinessLogin() {
 
               <Button 
                 type="submit" 
-                className="w-full bg-[#FF7139] hover:bg-[#e6632e] text-white h-12 font-semibold rounded-lg transition-colors"
+                className="w-full bg-green-600 hover:bg-green-700 text-white h-12 font-semibold rounded-lg transition-colors shadow-lg hover:shadow-xl"
                 disabled={isLoading}
               >
-                {isLoading ? 'Signing in...' : 'Sign in'}
+                {isLoading ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    <span>Signing in...</span>
+                  </div>
+                ) : (
+                  'Sign in'
+                )}
               </Button>
 
               <div className="relative my-6">
@@ -181,7 +188,7 @@ export default function BusinessLogin() {
                   <div className="w-full border-t border-gray-200" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-white text-gray-500">Don't have an account?</span>
+                  <span className="px-4 bg-ivory text-gray-500">Don't have an account?</span>
                 </div>
               </div>
 
