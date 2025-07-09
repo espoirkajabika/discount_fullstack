@@ -12,7 +12,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -20,7 +19,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -66,7 +64,7 @@ export default function BusinessSignup() {
     avatar_url: "",
     business_hours: null,
     category_id: null,
-    // New location fields
+    // Location fields
     latitude: null,
     longitude: null,
     formatted_address: "",
@@ -74,16 +72,31 @@ export default function BusinessSignup() {
     address_components: null,
   });
 
+  // FIXED: Handle location data properly, including null case
   const handleLocationSelect = (locationData) => {
-    setFormData((prev) => ({
-      ...prev,
-      business_address: locationData.address,
-      formatted_address: locationData.address,
-      latitude: locationData.latitude,
-      longitude: locationData.longitude,
-      place_id: locationData.place_id,
-      address_components: locationData.address_components,
-    }));
+    if (locationData === null) {
+      // Clear all location-related fields when address is cleared
+      setFormData((prev) => ({
+        ...prev,
+        business_address: "",
+        formatted_address: "",
+        latitude: null,
+        longitude: null,
+        place_id: "",
+        address_components: null,
+      }));
+    } else {
+      // Set location data when address is selected
+      setFormData((prev) => ({
+        ...prev,
+        business_address: locationData.address,
+        formatted_address: locationData.address,
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
+        place_id: locationData.place_id,
+        address_components: locationData.address_components,
+      }));
+    }
   };
 
   const [categories, setCategories] = useState([]);
@@ -159,78 +172,81 @@ export default function BusinessSignup() {
     return true;
   };
 
-  // In your signup page handleSubmit function
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  
-  if (!validateForm()) {
-    return;
-  }
-
-  setIsLoading(true);
-  setError('');
-
-  try {
-    // Prepare data for API (remove confirmPassword and format for API)
-    const { confirmPassword, ...dataToSend } = formData;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     
-    // Helper function to clean null-like values
-    const cleanValue = (value) => {
-      if (value === null || value === undefined || value === "" || value === "null" || value === "undefined") {
-        return null;
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // Prepare data for API (remove confirmPassword and format for API)
+      const { confirmPassword, ...dataToSend } = formData;
+      
+      // Helper function to clean null-like values
+      const cleanValue = (value) => {
+        if (value === null || value === undefined || value === "" || value === "null" || value === "undefined") {
+          return null;
+        }
+        return value;
+      };
+      
+      // Clean all location-related fields
+      const cleanedData = {
+        email: dataToSend.email,
+        password: dataToSend.password,
+        first_name: cleanValue(dataToSend.first_name),
+        last_name: cleanValue(dataToSend.last_name),
+        phone: cleanValue(dataToSend.phone),
+        
+        // Business fields
+        business_name: dataToSend.business_name,
+        business_description: cleanValue(dataToSend.business_description),
+        business_address: cleanValue(dataToSend.business_address),
+        business_phone: cleanValue(dataToSend.business_phone),
+        business_website: cleanValue(dataToSend.business_website),
+        avatar_url: cleanValue(dataToSend.avatar_url),
+        business_hours: cleanValue(dataToSend.business_hours),
+        category_id: cleanValue(dataToSend.category_id),
+        
+        // Location fields - ensure they're properly null if not set
+        latitude: cleanValue(dataToSend.latitude),
+        longitude: cleanValue(dataToSend.longitude),
+        formatted_address: cleanValue(dataToSend.formatted_address),
+        place_id: cleanValue(dataToSend.place_id),
+        address_components: cleanValue(dataToSend.address_components),
+        
+        // Phone number mapping
+        phone_number: cleanValue(dataToSend.business_phone) || cleanValue(dataToSend.phone),
+      };
+
+      // Remove fields that are null to avoid validation issues
+      Object.keys(cleanedData).forEach(key => {
+        if (cleanedData[key] === null || cleanedData[key] === undefined) {
+          delete cleanedData[key];
+        }
+      });
+
+      const result = await registerBusinessUser(cleanedData);
+      
+      if (result.error) {
+        setError(result.error);
+      } else {
+        // Success - redirect to dashboard or login
+        router.push('/auth/login?message=Account created successfully');
       }
-      return value;
-    };
-    
-    // FIXED: Properly clean all location-related fields
-    const cleanedData = {
-      email: dataToSend.email,
-      password: dataToSend.password,
-      first_name: cleanValue(dataToSend.first_name),
-      last_name: cleanValue(dataToSend.last_name),
-      phone: cleanValue(dataToSend.phone),
       
-      // Business fields
-      business_name: dataToSend.business_name,
-      business_description: cleanValue(dataToSend.business_description),
-      business_address: cleanValue(dataToSend.business_address),
-      business_phone: cleanValue(dataToSend.business_phone),
-      business_website: cleanValue(dataToSend.business_website),
-      avatar_url: cleanValue(dataToSend.avatar_url),
-      business_hours: cleanValue(dataToSend.business_hours),
-      category_id: cleanValue(dataToSend.category_id),
-      
-      // Location fields - ensure they're properly null if not set
-      latitude: cleanValue(dataToSend.latitude),
-      longitude: cleanValue(dataToSend.longitude),
-      formatted_address: cleanValue(dataToSend.formatted_address),
-      place_id: cleanValue(dataToSend.place_id),
-      address_components: cleanValue(dataToSend.address_components),
-      
-      // Phone number mapping
-      phone_number: cleanValue(dataToSend.business_phone) || cleanValue(dataToSend.phone),
-    };
+    } catch (err) {
+      console.error('Signup error:', err);
+      setError('Failed to create account. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    // Remove fields that are null to avoid validation issues
-    Object.keys(cleanedData).forEach(key => {
-      if (cleanedData[key] === null || cleanedData[key] === undefined) {
-        delete cleanedData[key];
-      }
-    });
-
-    console.log('Sending cleaned registration data:', cleanedData); // Debug log
-
-    const result = await registerBusinessUser(cleanedData);
-    
-    // ... rest of error handling
-    
-  } catch (err) {
-    console.error('Signup error:', err);
-    setError('Failed to create account. Please try again.');
-  } finally {
-    setIsLoading(false);
-  }
-};
   // Calculate progress based on active tab
   const getProgress = () => {
     switch (activeTab) {
@@ -261,7 +277,7 @@ const handleSubmit = async (e) => {
           </p>
         </div>
 
-        <Card className="rounded-2xl shadow-xl bg-ivory border-0">
+        <Card className="rounded-2xl shadow-xl bg-white border-0">
           <CardHeader className="px-8 pt-8 pb-4 text-center">
             <CardTitle className="text-2xl font-bold mb-2 text-gray-900">
               Create Business Account
@@ -684,30 +700,18 @@ const handleSubmit = async (e) => {
 
                 <TabsContent value="details" className="space-y-6 mt-6">
                   <div className="space-y-2">
-                    <Label
-                      htmlFor="business_address"
-                      className="text-gray-700 font-semibold text-sm"
-                    >
-                      Business Address
-                    </Label>
-                    <div className="relative">
-                      <MapPin
-                        className="absolute left-3 top-3 text-gray-400"
-                        size={18}
-                      />
-                      <AddressAutocomplete
-                        value={formData.business_address}
-                        onChange={(value) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            business_address: value,
-                          }))
-                        }
-                        onLocationSelect={handleLocationSelect}
-                        placeholder="Enter your business address"
-                        required={false}
-                      />
-                    </div>
+                    <AddressAutocomplete
+                      value={formData.business_address}
+                      onChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          business_address: value,
+                        }))
+                      }
+                      onLocationSelect={handleLocationSelect}
+                      placeholder="Enter your business address"
+                      required={false}
+                    />
                   </div>
 
                   <div className="space-y-2">
