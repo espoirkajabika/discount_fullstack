@@ -707,14 +707,6 @@ const handleSubmit = async (e) => {
                         placeholder="Enter your business address"
                         required={false}
                       />
-
-                      {/* Optional: Show coordinates for verification (remove in production) */}
-                      {formData.latitude && formData.longitude && (
-                        <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
-                          📍 Coordinates: {formData.latitude.toFixed(6)},{" "}
-                          {formData.longitude.toFixed(6)}
-                        </div>
-                      )}
                     </div>
                   </div>
 

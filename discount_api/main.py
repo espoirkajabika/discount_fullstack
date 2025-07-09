@@ -117,3 +117,16 @@ if __name__ == "__main__":
         port=8001,
         reload=settings.debug
     )
+
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "discount-fullstack-6y9dnsfnn-popupreach.vercel.app",
+        "https://discount-fullstack-6y9dnsfnn-popupreach.vercel.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
