@@ -1,112 +1,165 @@
-'use client'
-
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { MapPin, Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet'
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  return (
-    <nav className="bg-[#1e3a5f] text-white shadow-lg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          {/* Logo */}
-          <div className="flex items-center space-x-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#e94e1b] to-red-600">
-              <MapPin className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-white">PopupReach</span>
-          </div>
+  // Close mobile menu when screen size changes to desktop
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setMobileMenuOpen(false)
+      }
+    }
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [mobileMenuOpen])
+
+  const toggleMobileMenu = () => {
+    setMobileMenuOpen(!mobileMenuOpen)
+  }
+
+  const closeMobileMenu = () => {
+    setMobileMenuOpen(false)
+  }
+
+  return (
+    <>
+      <nav className="bg-[#1e3a5f] text-white shadow-lg relative z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            {/* Logo */}
+            <div className="flex items-center space-x-2 z-50">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#e94e1b] to-red-600">
+                <MapPin className="h-5 w-5 text-white" />
+              </div>
+              <span className="text-xl font-bold text-white">PopupReach</span>
+            </div>
+
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex items-center space-x-8">
+              <a 
+                href="#" 
+                className="text-[#e94e1b] hover:text-orange-300 transition-colors font-medium"
+              >
+                Home
+              </a>
+              <a 
+                href="#" 
+                className="text-white hover:text-[#e94e1b] transition-colors font-medium"
+              >
+                For Shoppers
+              </a>
+              <a 
+                href="#" 
+                className="text-white hover:text-[#e94e1b] transition-colors font-medium"
+              >
+                For Business
+              </a>
+            </div>
+
+            {/* Desktop Auth Buttons */}
+            <div className="hidden md:flex items-center space-x-4">
+              <Button 
+                variant="outline" 
+                className="border-white text-white hover:bg-white hover:text-[#1e3a5f] bg-transparent"
+              >
+                Sign In
+              </Button>
+              <Button className="bg-[#e94e1b] hover:bg-[#d13f16] text-white">
+                Sign Up
+              </Button>
+            </div>
+
+            {/* Mobile menu button */}
+            <button
+              onClick={toggleMobileMenu}
+              className="md:hidden relative z-50 p-2 text-white hover:bg-[#2a4d6e] rounded-md transition-colors"
+              aria-label="Toggle mobile menu"
+            >
+              {mobileMenuOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          onClick={closeMobileMenu}
+        />
+      )}
+
+      {/* Mobile Menu */}
+      <div
+        className={`fixed top-0 right-0 h-full w-80 max-w-[85vw] bg-[#1e3a5f] text-white transform transition-transform duration-300 ease-in-out z-40 md:hidden ${
+          mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        <div className="pt-20 px-6">
+          {/* Navigation Links */}
+          <div className="space-y-6 mb-8">
             <a 
               href="#" 
-              className="text-[#e94e1b] hover:text-orange-300 transition-colors font-medium"
+              onClick={closeMobileMenu}
+              className="block text-[#e94e1b] py-3 hover:text-orange-300 transition-colors font-medium text-lg border-b border-[#2a4d6e]"
             >
               Home
             </a>
             <a 
               href="#" 
-              className="text-white hover:text-[#e94e1b] transition-colors font-medium"
+              onClick={closeMobileMenu}
+              className="block text-white py-3 hover:text-[#e94e1b] transition-colors font-medium text-lg border-b border-[#2a4d6e]"
             >
               For Shoppers
             </a>
             <a 
               href="#" 
-              className="text-white hover:text-[#e94e1b] transition-colors font-medium"
+              onClick={closeMobileMenu}
+              className="block text-white py-3 hover:text-[#e94e1b] transition-colors font-medium text-lg border-b border-[#2a4d6e]"
             >
               For Business
             </a>
           </div>
 
-          {/* Desktop Auth Buttons */}
-          <div className="hidden md:flex items-center space-x-4">
+          {/* Auth Buttons */}
+          <div className="space-y-4">
             <Button 
+              onClick={closeMobileMenu}
               variant="outline" 
-              className="border-white text-white hover:bg-white hover:text-[#1e3a5f] bg-transparent"
+              className="w-full border-white text-white hover:bg-white hover:text-[#1e3a5f] bg-transparent py-3 text-lg"
             >
               Sign In
             </Button>
-            <Button className="bg-[#e94e1b] hover:bg-[#d13f16] text-white">
+            <Button 
+              onClick={closeMobileMenu}
+              className="w-full bg-[#e94e1b] hover:bg-[#d13f16] text-white py-3 text-lg"
+            >
               Sign Up
             </Button>
           </div>
-
-          {/* Mobile menu button */}
-          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-            <SheetTrigger asChild className="md:hidden">
-              <Button variant="ghost" size="icon" className="text-white hover:bg-[#2a4d6e]">
-                <Menu className="h-6 w-6" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent className="bg-[#1e3a5f] text-white border-[#2a4d6e]">
-              <SheetHeader>
-                <SheetTitle className="text-white text-left">Menu</SheetTitle>
-              </SheetHeader>
-              <div className="grid gap-4 py-4">
-                <a 
-                  href="#" 
-                  className="text-[#e94e1b] py-2 hover:text-orange-300 transition-colors font-medium"
-                >
-                  Home
-                </a>
-                <a 
-                  href="#" 
-                  className="text-white py-2 hover:text-[#e94e1b] transition-colors font-medium"
-                >
-                  For Shoppers
-                </a>
-                <a 
-                  href="#" 
-                  className="text-white py-2 hover:text-[#e94e1b] transition-colors font-medium"
-                >
-                  For Business
-                </a>
-                <div className="border-t border-[#2a4d6e] pt-4 mt-4">
-                  <Button 
-                    variant="outline" 
-                    className="w-full mb-2 border-white text-white hover:bg-white hover:text-[#1e3a5f] bg-transparent"
-                  >
-                    Sign In
-                  </Button>
-                  <Button className="w-full bg-[#e94e1b] hover:bg-[#d13f16] text-white">
-                    Sign Up
-                  </Button>
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
         </div>
       </div>
-    </nav>
+    </>
   )
 }

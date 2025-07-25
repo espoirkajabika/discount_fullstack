@@ -112,44 +112,44 @@ export default function HomePage() {
       </section>
 
       {/* See PopupReach in Action Section */}
-      <section className="py-16 lg:py-20 bg-[#1e3a5f] text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12 lg:mb-16">
-            <h2 className="text-3xl lg:text-4xl font-bold mb-4">
+      <section className="py-8 sm:py-12 lg:py-20 bg-[#1e3a5f] text-white">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
+          <div className="text-center mb-8 sm:mb-12 lg:mb-16">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4 px-2">
               See PopupReach in Action
             </h2>
-            <p className="text-xl text-blue-200 max-w-3xl mx-auto">
+            <p className="text-lg sm:text-xl text-blue-200 max-w-3xl mx-auto px-2">
               Watch how a real-time pop-up deal appears when a customer walks by
               your store - and how you track results instantly.
             </p>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center justify-items-center mb-12">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 items-center justify-items-center mb-8 sm:mb-12">
             {/* Left Column - Map Mockup */}
-            <div className="flex justify-center">
-              <div className="max-w-sm w-full">
-                <div className="relative h-80 lg:h-96 w-full">
+            <div className="flex justify-center w-full px-2 sm:px-0">
+              <div className="max-w-xs sm:max-w-sm w-full">
+                <div className="relative h-64 sm:h-80 lg:h-96 w-full">
                   <Image
                     src="/img/map-mockup.svg"
                     alt="PopupReach map view"
                     width={320}
                     height={320}
-                    className="object-contain"
+                    className="object-contain w-full h-full"
                   />
                 </div>
               </div>
             </div>
 
             {/* Right Column - Phone Mockup */}
-            <div className="flex justify-center">
-              <div className="max-w-sm w-full">
-                <div className="relative h-80 lg:h-96 w-full">
+            <div className="flex justify-center w-full px-2 sm:px-0">
+              <div className="max-w-xs sm:max-w-sm w-full">
+                <div className="relative h-64 sm:h-80 lg:h-96 w-full">
                   <Image
                     src="/img/phone2-mockup.svg"
-                    alt="PopupReach map view"
+                    alt="PopupReach phone mockup"
                     width={320}
                     height={320}
-                    className="object-contain"
+                    className="object-contain w-full h-full"
                   />
                 </div>
               </div>
@@ -157,10 +157,10 @@ export default function HomePage() {
           </div>
 
           {/* CTA Button */}
-          <div className="text-center">
+          <div className="text-center px-4">
             <Button
               size="lg"
-              className="bg-[#e94e1b] hover:bg-[#d13f16] text-white px-8 lg:px-12 py-4 text-lg lg:text-xl font-semibold"
+              className="bg-[#e94e1b] hover:bg-[#d13f16] text-white px-6 sm:px-8 lg:px-12 py-3 sm:py-4 text-base sm:text-lg lg:text-xl font-semibold w-full sm:w-auto max-w-sm sm:max-w-none"
             >
               Launch My First Promotion
             </Button>
