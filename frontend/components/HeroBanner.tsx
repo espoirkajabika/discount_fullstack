@@ -43,7 +43,7 @@ export default function HeroBanner() {
               <div className="relative h-96 w-full">
                 <Image
                   src="/img/phone-mockup.svg"
-                  alt="PopupReach Platform Illustration"
+                  alt="PopupReach"
                   fill
                   className="object-contain"
                   priority

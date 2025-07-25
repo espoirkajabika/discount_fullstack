@@ -132,7 +132,8 @@ export default function HomePage() {
                   <Image
                     src="/img/map-mockup.svg"
                     alt="PopupReach map view"
-                    fill
+                    width={320}
+                    height={320}
                     className="object-contain"
                   />
                 </div>
@@ -145,8 +146,9 @@ export default function HomePage() {
                 <div className="relative h-80 lg:h-96 w-full">
                   <Image
                     src="/img/phone2-mockup.svg"
-                    alt="PopupReach mobile notification"
-                    fill
+                    alt="PopupReach map view"
+                    width={320}
+                    height={320}
                     className="object-contain"
                   />
                 </div>
