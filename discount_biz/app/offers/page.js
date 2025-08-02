@@ -1,11 +1,11 @@
+// app/offers/page.js
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { getOffers } from '@/lib/offers';
 import { useAuth } from "@/context/AuthContext";
-import { BusinessRoute } from '@/components/ProtectedRoute';
+import BusinessLayout from '@/components/BusinessLayout';
 
 // Import components
 import { Button } from "@/components/ui/button";
@@ -31,10 +31,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StorageImage } from "@/components/ui/storage-image";
-import { PageContainer, PageHeader, ContentContainer } from '@/components/Navigation';
 
 function OffersContent() {
   const router = useRouter();
@@ -45,6 +43,7 @@ function OffersContent() {
   const [offers, setOffers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [pagination, setPagination] = useState({
     page: 1,
@@ -54,7 +53,7 @@ function OffersContent() {
   });
   const [sortBy, setSortBy] = useState("created_at");
   const [sortOrder, setSortOrder] = useState("desc");
-  const [activeTab, setActiveTab] = useState("all");
+  const [activeFilterTab, setActiveFilterTab] = useState("all");
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 2;
 
@@ -70,22 +69,20 @@ function OffersContent() {
     setSearchTerm(search);
     setSortBy(sortBy);
     setSortOrder(sortOrder);
-    if (status) setActiveTab(status);
+    if (status) setActiveFilterTab(status);
   }, [searchParams]);
 
   // Fetch offers data
   useEffect(() => {
-    if (!initialized) return; // Wait until auth is initialized
-    
+    if (!initialized) return;
     fetchOffers();
-  }, [pagination.page, searchTerm, sortBy, sortOrder, activeTab, retryCount, initialized]);
+  }, [pagination.page, searchTerm, sortBy, sortOrder, activeFilterTab, retryCount, initialized]);
 
   const fetchOffers = async () => {
     setIsLoading(true);
     setError("");
   
     try {
-      // Build query parameters
       const params = {
         page: pagination.page,
         limit: pagination.limit,
@@ -97,25 +94,22 @@ function OffersContent() {
         params.search = searchTerm;
       }
   
-      // Add status filter if not 'all'
-      if (activeTab !== "all") {
-        params.status = activeTab;
+      if (activeFilterTab !== "all") {
+        params.status = activeFilterTab;
       }
   
       console.log("Fetching offers with params:", params);
       const result = await getOffers(params);
 
       if (result.error) {
-        // If unauthorized and we should be logged in, retry
         if (result.error.includes('401') && isLoggedIn && retryCount < maxRetries) {
           console.log(`Auth error detected. Retrying (${retryCount + 1}/${maxRetries})...`);
           setTimeout(() => {
             setRetryCount(prev => prev + 1);
-          }, 1000 * (retryCount + 1)); // Exponential backoff
+          }, 1000 * (retryCount + 1));
           return;
         }
         
-        // More specific error message for unauthorized
         if (result.error.includes("Unauthorized")) {
           setError("You need to be logged in to view offers. Please sign in again.");
         } else {
@@ -124,7 +118,6 @@ function OffersContent() {
         return;
       }
   
-      // Set the data
       setOffers(result.offers || []);
       setPagination(prev => ({
         ...prev,
@@ -138,6 +131,13 @@ function OffersContent() {
     }
   };
 
+  // Handle refresh
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchOffers();
+    setRefreshing(false);
+  };
+
   // Handle search input change
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
@@ -146,7 +146,7 @@ function OffersContent() {
   // Handle search submit
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    setPagination((prev) => ({ ...prev, page: 1 })); // Reset to page 1 on new search
+    setPagination((prev) => ({ ...prev, page: 1 }));
     updateUrlParams();
   };
 
@@ -159,27 +159,24 @@ function OffersContent() {
 
   // Handle sort change
   const handleSortChange = (newSortBy) => {
-    // If clicking on the same field, toggle order
     if (newSortBy === sortBy) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     } else {
-      // Default to descending for new sort field
       setSortBy(newSortBy);
       setSortOrder("desc");
     }
 
-    setPagination((prev) => ({ ...prev, page: 1 })); // Reset to page 1 on sort change
+    setPagination((prev) => ({ ...prev, page: 1 }));
     updateUrlParams({
       sortBy: newSortBy,
-      sortOrder:
-        newSortBy === sortBy ? (sortOrder === "asc" ? "desc" : "asc") : "desc",
+      sortOrder: newSortBy === sortBy ? (sortOrder === "asc" ? "desc" : "asc") : "desc",
     });
   };
 
   // Handle status tab change
   const handleStatusChange = (status) => {
-    setActiveTab(status);
-    setPagination((prev) => ({ ...prev, page: 1 })); // Reset to page 1 on status change
+    setActiveFilterTab(status);
+    setPagination((prev) => ({ ...prev, page: 1 }));
     updateUrlParams({ status: status === "all" ? null : status });
   };
 
@@ -187,33 +184,19 @@ function OffersContent() {
   const updateUrlParams = (overrides = {}) => {
     const params = new URLSearchParams();
 
-    // Current values
-    const page =
-      overrides.page !== undefined ? overrides.page : pagination.page;
-    const search =
-      overrides.search !== undefined ? overrides.search : searchTerm;
-    const newSortBy =
-      overrides.sortBy !== undefined ? overrides.sortBy : sortBy;
-    const newSortOrder =
-      overrides.sortOrder !== undefined ? overrides.sortOrder : sortOrder;
-    const status =
-      overrides.status !== undefined
-        ? overrides.status
-        : activeTab !== "all"
-        ? activeTab
-        : null;
+    const page = overrides.page !== undefined ? overrides.page : pagination.page;
+    const search = overrides.search !== undefined ? overrides.search : searchTerm;
+    const newSortBy = overrides.sortBy !== undefined ? overrides.sortBy : sortBy;
+    const newSortOrder = overrides.sortOrder !== undefined ? overrides.sortOrder : sortOrder;
+    const status = overrides.status !== undefined ? overrides.status : activeFilterTab !== "all" ? activeFilterTab : null;
 
-    // Only add params that have values
     if (page > 1) params.append("page", page);
     if (search) params.append("search", search);
     if (newSortBy !== "created_at") params.append("sortBy", newSortBy);
     if (newSortOrder !== "desc") params.append("sortOrder", newSortOrder);
     if (status) params.append("status", status);
 
-    // Update URL without reloading the page
-    const newUrl = `${window.location.pathname}${
-      params.toString() ? "?" + params.toString() : ""
-    }`;
+    const newUrl = `${window.location.pathname}${params.toString() ? "?" + params.toString() : ""}`;
     window.history.pushState({}, "", newUrl);
   };
 
@@ -221,8 +204,6 @@ function OffersContent() {
   const handlePageChange = (newPage) => {
     setPagination((prev) => ({ ...prev, page: newPage }));
     updateUrlParams({ page: newPage });
-
-    // Scroll to top of the page
     window.scrollTo(0, 0);
   };
 
@@ -285,14 +266,14 @@ function OffersContent() {
         <Button 
           onClick={handleClearSearch}
           variant="outline"
-          className="border-green-200 text-green-600 hover:bg-green-50"
+          className="border-orange-200 text-orange-600 hover:bg-orange-50"
         >
           Clear search
         </Button>
       ) : (
         <Button 
           onClick={() => router.push("/offers/new")}
-          className="bg-green-600 hover:bg-green-700 text-white"
+          className="bg-orange-500 hover:bg-orange-600 text-white"
         >
           <PlusCircle className="h-4 w-4 mr-2" />
           Create Your First Offer
@@ -326,15 +307,12 @@ function OffersContent() {
     const status = getOfferStatus(offer);
     const productName = offer.products?.name || offer.product?.name || "Unknown Product";
     const productPrice = offer.products?.price || offer.product?.price || 0;
-    const discountAmount = (
-      (productPrice * offer.discount_percentage) /
-      100
-    ).toFixed(2);
+    const discountAmount = ((productPrice * offer.discount_percentage) / 100).toFixed(2);
     const finalPrice = (productPrice - discountAmount).toFixed(2);
 
     return (
       <div
-        className="border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-green-200 transition-all duration-200 cursor-pointer bg-white group"
+        className="border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-orange-200 transition-all duration-200 cursor-pointer bg-white group"
         onClick={() => router.push(`/offers/${offer.id}`)}
       >
         <div className="p-6">
@@ -354,11 +332,11 @@ function OffersContent() {
                 />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 group-hover:text-green-600 transition-colors mb-1">
+                <h3 className="font-semibold text-gray-900 group-hover:text-orange-600 transition-colors mb-1">
                   {productName}
                 </h3>
                 <div className="flex items-center space-x-2">
-                  <div className="flex items-center bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                  <div className="flex items-center bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
                     <Percent className="h-4 w-4 mr-1" />
                     <span className="font-bold">{offer.discount_percentage}% OFF</span>
                   </div>
@@ -392,10 +370,10 @@ function OffersContent() {
                 <p className="text-sm text-gray-600 line-through">
                   {formatPrice(productPrice)}
                 </p>
-                <p className="text-lg font-bold text-green-600">
+                <p className="text-lg font-bold text-orange-600">
                   {formatPrice(finalPrice)}
                 </p>
-                <p className="text-xs text-green-600">
+                <p className="text-xs text-orange-600">
                   Save {formatPrice(discountAmount)}
                 </p>
               </div>
@@ -414,7 +392,7 @@ function OffersContent() {
               </div>
               <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
                 <div 
-                  className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                  className="bg-orange-600 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${Math.min((offer.current_claims / offer.max_claims) * 100, 100)}%` }}
                 ></div>
               </div>
@@ -466,12 +444,11 @@ function OffersContent() {
   // Render page numbers
   const renderPageNumbers = () => {
     const pageNumbers = [];
-    const maxVisible = 5; // Maximum number of page buttons to show
+    const maxVisible = 5;
 
     let startPage = Math.max(1, pagination.page - Math.floor(maxVisible / 2));
     let endPage = Math.min(pagination.totalPages, startPage + maxVisible - 1);
 
-    // Adjust start if we're near the end
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
     }
@@ -484,7 +461,7 @@ function OffersContent() {
           size="sm"
           onClick={() => handlePageChange(i)}
           className={pagination.page === i 
-            ? "bg-green-600 hover:bg-green-700 text-white" 
+            ? "bg-orange-600 hover:bg-orange-700 text-white" 
             : "border-gray-200 hover:bg-gray-50"
           }
         >
@@ -497,192 +474,187 @@ function OffersContent() {
   };
 
   return (
-    <PageContainer>
-      <PageHeader
-        title="Offers & Discounts"
-        subtitle="Manage special offers and discounts for your products"
-        backUrl="/dashboard"
-        backLabel="Dashboard"
-      >
+    <BusinessLayout
+      title="Offers & Discounts"
+      subtitle="Manage special offers and discounts for your products"
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
+      showRefresh={true}
+    >
+      {error && (
+        <Alert variant="destructive" className="mb-6 bg-red-50 border-red-200">
+          <AlertCircle className="h-4 w-4 mr-2" />
+          <AlertDescription className="text-red-800">{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Create Offer Button */}
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Your Offers</h3>
+          <p className="text-gray-600">
+            {pagination.total > 0 ? `${pagination.total} offers created` : 'No offers created yet'}
+          </p>
+        </div>
         <Button 
           onClick={() => router.push("/offers/new")}
-          className="bg-green-600 hover:bg-green-700 text-white"
+          className="bg-orange-500 hover:bg-orange-600 text-white"
         >
           <PlusCircle className="h-4 w-4 mr-2" />
           Create New Offer
         </Button>
-      </PageHeader>
+      </div>
 
-      <ContentContainer>
-        {error && (
-          <Alert variant="destructive" className="mb-6 bg-red-50 border-red-200">
-            <AlertCircle className="h-4 w-4 mr-2" />
-            <AlertDescription className="text-red-800">{error}</AlertDescription>
-          </Alert>
-        )}
-
-        <Card className="border-0 shadow-lg bg-white">
-          <CardHeader className="pb-4">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <CardTitle className="text-xl text-gray-900">Your Offers</CardTitle>
-                <p className="text-gray-600 mt-1">
-                  {pagination.total > 0 ? `${pagination.total} offers created` : 'No offers created yet'}
-                </p>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                {/* Sort Dropdown */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="border-gray-200 hover:bg-gray-50">
-                      <SlidersHorizontal className="h-4 w-4 mr-2" />
-                      Sort
-                      {sortBy !== "created_at" && (
-                        <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800">
-                          {sortBy.replace("_", " ")}
-                        </Badge>
-                      )}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem
-                      onClick={() => handleSortChange("created_at")}
-                      className="flex items-center justify-between"
-                    >
-                      Date Created
-                      {sortBy === "created_at" && (
-                        <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </Badge>
-                      )}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleSortChange("expiry_date")}
-                      className="flex items-center justify-between"
-                    >
-                      Expiry Date
-                      {sortBy === "expiry_date" && (
-                        <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </Badge>
-                      )}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleSortChange("discount_percentage")}
-                      className="flex items-center justify-between"
-                    >
-                      Discount %
-                      {sortBy === "discount_percentage" && (
-                        <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </Badge>
-                      )}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleSortChange("current_claims")}
-                      className="flex items-center justify-between"
-                    >
-                      Claims
-                      {sortBy === "current_claims" && (
-                        <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </Badge>
-                      )}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+      <Card className="border-0 shadow-lg bg-white">
+        <CardHeader className="pb-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              {/* Sort Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="border-gray-200 hover:bg-gray-50">
+                    <SlidersHorizontal className="h-4 w-4 mr-2" />
+                    Sort
+                    {sortBy !== "created_at" && (
+                      <Badge variant="secondary" className="ml-2 bg-orange-100 text-orange-800">
+                        {sortBy.replace("_", " ")}
+                      </Badge>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem
+                    onClick={() => handleSortChange("created_at")}
+                    className="flex items-center justify-between"
+                  >
+                    Date Created
+                    {sortBy === "created_at" && (
+                      <Badge variant="secondary" className="ml-2 bg-orange-100 text-orange-800">
+                        {sortOrder === "asc" ? "↑" : "↓"}
+                      </Badge>
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleSortChange("expiry_date")}
+                    className="flex items-center justify-between"
+                  >
+                    Expiry Date
+                    {sortBy === "expiry_date" && (
+                      <Badge variant="secondary" className="ml-2 bg-orange-100 text-orange-800">
+                        {sortOrder === "asc" ? "↑" : "↓"}
+                      </Badge>
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleSortChange("discount_percentage")}
+                    className="flex items-center justify-between"
+                  >
+                    Discount %
+                    {sortBy === "discount_percentage" && (
+                      <Badge variant="secondary" className="ml-2 bg-orange-100 text-orange-800">
+                        {sortOrder === "asc" ? "↑" : "↓"}
+                      </Badge>
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleSortChange("current_claims")}
+                    className="flex items-center justify-between"
+                  >
+                    Claims
+                    {sortBy === "current_claims" && (
+                      <Badge variant="secondary" className="ml-2 bg-orange-100 text-orange-800">
+                        {sortOrder === "asc" ? "↑" : "↓"}
+                      </Badge>
+                    )}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
+          </div>
 
-            {/* Search Bar */}
-            <div className="mt-6">
-              <form onSubmit={handleSearchSubmit} className="relative max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search offers..."
-                  className="pl-10 pr-10 bg-gray-50 border-gray-200 focus:border-green-500 focus:ring-green-500"
-                  value={searchTerm}
-                  onChange={handleSearchChange}
-                />
-                {searchTerm && (
-                  <button 
-                    type="button"
-                    onClick={handleClearSearch}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-              </form>
+          {/* Search Bar */}
+          <div className="mt-6">
+            <form onSubmit={handleSearchSubmit} className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search offers..."
+                className="pl-10 pr-10 bg-gray-50 border-gray-200 focus:border-orange-500 focus:ring-orange-500"
+                value={searchTerm}
+                onChange={handleSearchChange}
+              />
+              {searchTerm && (
+                <button 
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </form>
+          </div>
+
+          {/* Status Tabs */}
+          <div className="mt-6">
+            <Tabs
+              defaultValue={activeFilterTab}
+              onValueChange={handleStatusChange}
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-4 bg-gray-100 p-1 rounded-lg">
+                <TabsTrigger 
+                  value="all" 
+                  className="data-[state=active]:bg-orange-600 data-[state=active]:text-white"
+                >
+                  All Offers
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="active"
+                  className="data-[state=active]:bg-orange-600 data-[state=active]:text-white"
+                >
+                  Active
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="upcoming"
+                  className="data-[state=active]:bg-orange-600 data-[state=active]:text-white"
+                >
+                  Upcoming
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="expired"
+                  className="data-[state=active]:bg-orange-600 data-[state=active]:text-white"
+                >
+                  Expired
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        </CardHeader>
+        
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <OfferSkeleton key={i} />
+              ))}
             </div>
-
-            {/* Status Tabs */}
-            <div className="mt-6">
-              <Tabs
-                defaultValue={activeTab}
-                onValueChange={handleStatusChange}
-                className="w-full"
-              >
-                <TabsList className="grid w-full grid-cols-4 bg-gray-100 p-1 rounded-lg">
-                  <TabsTrigger 
-                    value="all" 
-                    className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
-                  >
-                    All Offers
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="active"
-                    className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
-                  >
-                    Active
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="upcoming"
-                    className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
-                  >
-                    Upcoming
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="expired"
-                    className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
-                  >
-                    Expired
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+          ) : offers.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {offers.map((offer) => (
+                <OfferCard key={offer.id} offer={offer} />
+              ))}
             </div>
-          </CardHeader>
-          
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-4">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <OfferSkeleton key={i} />
-                ))}
-              </div>
-            ) : offers.length === 0 ? (
-              <EmptyState />
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {offers.map((offer) => (
-                  <OfferCard key={offer.id} offer={offer} />
-                ))}
-              </div>
-            )}
+          )}
 
-            {!isLoading && offers.length > 0 && renderPagination()}
-          </CardContent>
-        </Card>
-      </ContentContainer>
-    </PageContainer>
+          {!isLoading && offers.length > 0 && renderPagination()}
+        </CardContent>
+      </Card>
+    </BusinessLayout>
   );
 }
 
 export default function OffersPage() {
-  return (
-    <BusinessRoute>
-      <OffersContent />
-    </BusinessRoute>
-  );
+  return <OffersContent />;
 }

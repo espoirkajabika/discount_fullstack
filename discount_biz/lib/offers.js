@@ -1,7 +1,43 @@
-// lib/offers.js - Updated version
+// lib/offers.js - Fixed version with correct API endpoints
 import { makeAuthenticatedRequest } from '@/lib/auth';
 
 class OffersService {
+  // Create new offer - FIXED ENDPOINT
+  async createOffer(offerData) {
+    try {
+      // The endpoint should be /api/v1/business/offers (via makeAuthenticatedRequest)
+      const response = await makeAuthenticatedRequest('/business/offers', {
+        method: 'POST',
+        body: JSON.stringify(offerData),
+      });
+      
+      if (!response || !response.ok) {
+        const data = await response?.json();
+        console.error('Create offer error response:', data);
+        
+        if (data?.detail) {
+          if (Array.isArray(data.detail)) {
+            // Handle validation errors
+            const errorMessages = data.detail.map(err => {
+              const field = err.loc ? err.loc[err.loc.length - 1] : 'field';
+              return `${field}: ${err.msg}`;
+            }).join(', ');
+            return { error: `Validation errors - ${errorMessages}` };
+          } else {
+            return { error: data.detail };
+          }
+        }
+        return { error: data?.message || 'Failed to create offer' };
+      }
+      
+      const data = await response.json();
+      return { success: true, offer: data.offer || data };
+    } catch (error) {
+      console.error('Create offer error:', error);
+      return { error: 'Network error. Please try again.' };
+    }
+  }
+
   // Get all offers for current business
   async getOffers(params = {}) {
     try {
@@ -58,91 +94,18 @@ class OffersService {
     }
   }
 
-  // Create new offer
-  async createOffer(offerData) {
-    try {
-      // Transform the data to match what the backend expects
-      const payload = {
-        product_id: offerData.product_id,
-        discount_percentage: parseInt(offerData.discount_percentage),
-        discount_code: offerData.discount_code || null,
-        start_date: offerData.start_date,
-        expiry_date: offerData.expiry_date,
-        is_active: offerData.is_active || true,
-        max_claims: offerData.max_claims ? parseInt(offerData.max_claims) : null,
-        title: offerData.title,
-        description: offerData.description,
-        terms_conditions: offerData.terms_conditions
-      };
-
-      console.log('Sending offer payload:', payload);
-
-      const response = await makeAuthenticatedRequest('/business/offers', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      
-      if (!response || !response.ok) {
-        const data = await response?.json();
-        console.error('Create offer error response:', data);
-        if (data.detail) {
-          if (Array.isArray(data.detail)) {
-            const errorMessages = data.detail.map(err => {
-              const field = err.loc ? err.loc[err.loc.length - 1] : 'field';
-              return `${field}: ${err.msg}`;
-            }).join(', ');
-            return { error: `Validation errors - ${errorMessages}` };
-          } else {
-            return { error: data.detail };
-          }
-        }
-        return { error: data?.message || 'Failed to create offer' };
-      }
-      
-      const data = await response.json();
-      return { success: true, offer: data.offer || data };
-    } catch (error) {
-      console.error('Create offer error:', error);
-      return { error: 'Network error. Please try again.' };
-    }
-  }
-
-  // Update existing offer
+  // Update offer
   async updateOffer(offerId, offerData) {
     try {
-      // Transform the data to match what the backend expects
-      const payload = {};
-      
-      if (offerData.discount_percentage !== undefined) {
-        payload.discount_percentage = parseInt(offerData.discount_percentage);
-      }
-      if (offerData.discount_code !== undefined) {
-        payload.discount_code = offerData.discount_code || null;
-      }
-      if (offerData.start_date !== undefined) {
-        payload.start_date = offerData.start_date;
-      }
-      if (offerData.expiry_date !== undefined) {
-        payload.expiry_date = offerData.expiry_date;
-      }
-      if (offerData.is_active !== undefined) {
-        payload.is_active = offerData.is_active;
-      }
-      if (offerData.max_claims !== undefined) {
-        payload.max_claims = offerData.max_claims ? parseInt(offerData.max_claims) : null;
-      }
-
-      console.log('Sending update payload:', payload);
-
       const response = await makeAuthenticatedRequest(`/business/offers/${offerId}`, {
         method: 'PATCH',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(offerData),
       });
       
       if (!response || !response.ok) {
         const data = await response?.json();
         console.error('Update offer error response:', data);
-        if (data.detail) {
+        if (data?.detail) {
           if (Array.isArray(data.detail)) {
             const errorMessages = data.detail.map(err => {
               const field = err.loc ? err.loc[err.loc.length - 1] : 'field';

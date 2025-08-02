@@ -1301,3 +1301,335 @@ async def get_offer_categories():
             "categories": categories_result.data or [],
             "total": len(categories_result.data or [])
         }
+    
+
+# app/api/routes/customer.py - Updated routes for new offer types
+from fastapi import APIRouter, Query, HTTPException, status, Depends
+from typing import Optional, Dict, Any
+from datetime import datetime
+
+from app.core.database import supabase, supabase_admin
+from app.schemas.user import UserProfile
+from app.utils.dependencies import get_current_active_user
+from app.utils.offer_calculations import OfferCalculator
+
+router = APIRouter(prefix="/customer", tags=["Customer"])
+
+@router.get("/offers/search", response_model=dict)
+async def search_offers(
+    q: Optional[str] = Query(None, description="Search query"),
+    category_id: Optional[str] = Query(None, description="Filter by category"),
+    business_id: Optional[str] = Query(None, description="Filter by business"),
+    discount_type: Optional[str] = Query(None, regex="^(percentage|fixed|minimum_purchase|quantity_discount|bogo)$", description="Discount type"),
+    min_discount: Optional[float] = Query(None, ge=0, description="Minimum discount value"),
+    max_discount: Optional[float] = Query(None, ge=0, description="Maximum discount value"),
+    available_only: bool = Query(True, description="Only show offers with available claims"),
+    sort_by: str = Query("discount_value", regex="^(discount_value|expiry_date|created_at)$", description="Sort field"),
+    sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order"),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100)
+):
+    """Search and filter offers with support for all discount types"""
+    
+    try:
+        current_time = datetime.utcnow().isoformat()
+        
+        # Build query - only active offers within date range
+        query = supabase.table("offers").select(
+            "*, products!product_id(*, categories(*)), businesses!inner(business_name, is_verified, avatar_url)",  
+            count="exact"
+        ).eq("is_active", True).gte("expiry_date", current_time).lte("start_date", current_time)
+
+        # Apply search
+        if q:
+            query = query.or_(f"title.ilike.%{q}%,description.ilike.%{q}%")
+        
+        # Apply filters
+        if category_id:
+            query = query.or_(f"products.category_id.eq.{category_id},businesses.category_id.eq.{category_id}")
+        
+        if business_id:
+            query = query.eq("business_id", business_id)
+        
+        if discount_type:
+            query = query.eq("discount_type", discount_type)
+        
+        if min_discount is not None:
+            query = query.gte("discount_value", min_discount)
+        
+        if max_discount is not None:
+            query = query.lte("discount_value", max_discount)
+        
+        if available_only:
+            # Only show offers that still have claims available
+            query = query.or_("max_claims.is.null,current_claims.lt.max_claims")
+        
+        # Apply sorting
+        desc_order = sort_order == "desc"
+        query = query.order(sort_by, desc=desc_order)
+        
+        # Apply pagination
+        offset = (page - 1) * size
+        query = query.range(offset, offset + size - 1)
+        
+        result = query.execute()
+        
+        total = result.count if result.count else 0
+        total_pages = (total + size - 1) // size
+        
+        # Process offers and add display information
+        enhanced_offers = []
+        for offer in result.data:
+            offer_data = convert_decimals_to_float(offer)
+            
+            # Fix structure for frontend
+            if 'products' in offer_data:
+                offer_data['product'] = offer_data['products']
+                del offer_data['products']
+            if 'businesses' in offer_data:
+                offer_data['business'] = offer_data['businesses']
+                del offer_data['businesses']
+            
+            # Add display information
+            offer_data['display_text'] = OfferCalculator.get_offer_display_text(offer_data)
+            offer_data['conditions_text'] = get_offer_conditions_text(offer_data)
+            
+            enhanced_offers.append(offer_data)
+        
+        return {
+            "offers": enhanced_offers,
+            "pagination": {
+                "page": page,
+                "size": size,
+                "total": total,
+                "total_pages": total_pages,
+                "has_next": page < total_pages,
+                "has_prev": page > 1
+            },
+            "filters_applied": {
+                "search": q,
+                "category_id": category_id,
+                "business_id": business_id,
+                "discount_type": discount_type,
+                "min_discount": min_discount,
+                "max_discount": max_discount
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error searching offers: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to search offers: {str(e)}"
+        )
+
+
+@router.get("/offers/{offer_id}", response_model=dict)
+async def get_offer_details(
+    offer_id: str,
+    current_user: Optional[UserProfile] = Depends(get_current_active_user)
+):
+    """Get detailed offer information with calculation examples"""
+    
+    try:
+        # Get offer with all related data
+        result = supabase.table("offers").select(
+            "*, products(*, categories(*)), businesses(business_name, is_verified, avatar_url, business_address)"
+        ).eq("id", offer_id).eq("is_active", True).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offer not found or inactive"
+            )
+        
+        offer_data = convert_decimals_to_float(result.data[0])
+        
+        # Fix structure for frontend
+        if 'products' in offer_data:
+            offer_data['product'] = offer_data['products']
+            del offer_data['products']
+        if 'businesses' in offer_data:
+            offer_data['business'] = offer_data['businesses']
+            del offer_data['businesses']
+        
+        # Add enhanced display information
+        offer_data['display_text'] = OfferCalculator.get_offer_display_text(offer_data)
+        offer_data['conditions_text'] = get_offer_conditions_text(offer_data)
+        
+        # Add calculation examples for different quantities
+        item_price = float(offer_data['product']['price']) if offer_data['product']['price'] else 0
+        calculation_examples = []
+        
+        # Generate examples based on offer type
+        if offer_data['discount_type'] in ['percentage', 'fixed']:
+            quantities = [1, 2, 5]
+        elif offer_data['discount_type'] == 'quantity_discount':
+            min_qty = offer_data.get('minimum_quantity', 1)
+            quantities = [min_qty - 1, min_qty, min_qty + 2] if min_qty > 1 else [1, 3, 5]
+        elif offer_data['discount_type'] == 'bogo':
+            buy_qty = offer_data.get('buy_quantity', 1)
+            quantities = [buy_qty - 1, buy_qty, buy_qty * 2] if buy_qty > 1 else [1, 2, 4]
+        else:
+            quantities = [1, 2, 5]
+        
+        for qty in quantities:
+            if qty > 0:
+                calc_result = OfferCalculator.calculate_discount(
+                    offer_data=offer_data,
+                    quantity=qty,
+                    cart_total=item_price * qty,  # Simple cart total for examples
+                    item_price=item_price
+                )
+                calculation_examples.append({
+                    'quantity': qty,
+                    'calculation': calc_result
+                })
+        
+        offer_data['calculation_examples'] = calculation_examples
+        
+        # Check if user has saved or claimed this offer
+        if current_user:
+            # Check if saved
+            saved_check = supabase.table("saved_offers").select("id").eq("user_id", str(current_user.id)).eq("offer_id", offer_id).execute()
+            offer_data['is_saved'] = len(saved_check.data) > 0
+            
+            # Check if claimed
+            claimed_check = supabase.table("claimed_offers").select("id, is_redeemed").eq("user_id", str(current_user.id)).eq("offer_id", offer_id).execute()
+            offer_data['is_claimed'] = len(claimed_check.data) > 0
+            if offer_data['is_claimed']:
+                offer_data['is_redeemed'] = claimed_check.data[0]['is_redeemed']
+        else:
+            offer_data['is_saved'] = False
+            offer_data['is_claimed'] = False
+            offer_data['is_redeemed'] = False
+        
+        # Check if offer is still available for claiming
+        max_claims = offer_data.get('max_claims')
+        current_claims = offer_data.get('current_claims', 0)
+        offer_data['can_claim'] = max_claims is None or current_claims < max_claims
+        offer_data['claims_remaining'] = None if max_claims is None else max_claims - current_claims
+        
+        return {"offer": offer_data}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting offer details: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve offer: {str(e)}"
+        )
+
+
+@router.post("/offers/{offer_id}/calculate", response_model=dict)
+async def calculate_customer_discount(
+    offer_id: str,
+    calculation_request: Dict[str, Any]
+):
+    """Calculate discount for a customer's specific purchase scenario"""
+    
+    try:
+        quantity = calculation_request.get("quantity", 1)
+        cart_total = calculation_request.get("cart_total")
+        
+        # Get offer data
+        result = supabase.table("offers").select(
+            "*, products(price)"
+        ).eq("id", offer_id).eq("is_active", True).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offer not found or inactive"
+            )
+        
+        offer_data = result.data[0]
+        item_price = float(offer_data["products"]["price"]) if offer_data["products"]["price"] else 0
+        
+        # Calculate discount
+        calculation_result = OfferCalculator.calculate_discount(
+            offer_data=offer_data,
+            quantity=quantity,
+            cart_total=cart_total,
+            item_price=item_price
+        )
+        
+        return {
+            "calculation": calculation_result,
+            "offer_display_text": OfferCalculator.get_offer_display_text(offer_data),
+            "item_price": item_price,
+            "quantity": quantity
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error calculating customer discount: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Calculation failed: {str(e)}"
+        )
+
+
+def get_offer_conditions_text(offer_data: Dict[str, Any]) -> Optional[str]:
+    """Generate human-readable conditions text for an offer"""
+    discount_type = offer_data.get('discount_type')
+    conditions = []
+    
+    if discount_type == 'minimum_purchase':
+        min_purchase = offer_data.get('minimum_purchase_amount', 0)
+        conditions.append(f"Minimum purchase of ${min_purchase:.2f} required")
+    
+    elif discount_type == 'quantity_discount':
+        min_qty = offer_data.get('minimum_quantity', 0)
+        conditions.append(f"Must purchase {min_qty} or more items")
+    
+    elif discount_type == 'bogo':
+        buy_qty = offer_data.get('buy_quantity', 1)
+        conditions.append(f"Must purchase at least {buy_qty} items to qualify")
+    
+    # Add general conditions
+    max_claims = offer_data.get('max_claims')
+    if max_claims:
+        current_claims = offer_data.get('current_claims', 0)
+        remaining = max_claims - current_claims
+        if remaining > 0:
+            conditions.append(f"Limited offer - {remaining} claims remaining")
+        else:
+            conditions.append("Offer no longer available")
+    
+    # Add expiry info
+    expiry_date = offer_data.get('expiry_date')
+    if expiry_date:
+        if isinstance(expiry_date, str):
+            expiry_dt = datetime.fromisoformat(expiry_date.replace('Z', '+00:00'))
+        else:
+            expiry_dt = expiry_date
+        
+        now = datetime.utcnow()
+        if expiry_dt > now:
+            days_remaining = (expiry_dt - now).days
+            if days_remaining == 0:
+                conditions.append("Expires today")
+            elif days_remaining == 1:
+                conditions.append("Expires tomorrow")
+            else:
+                conditions.append(f"Expires in {days_remaining} days")
+        else:
+            conditions.append("Expired")
+    
+    return " • ".join(conditions) if conditions else None
+
+
+def convert_decimals_to_float(data):
+    """Convert Decimal fields to float in a dictionary or list"""
+    from decimal import Decimal
+    if isinstance(data, dict):
+        return {key: convert_decimals_to_float(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [convert_decimals_to_float(item) for item in data]
+    elif isinstance(data, Decimal):
+        return float(data)
+    else:
+        return data
