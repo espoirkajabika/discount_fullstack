@@ -591,3 +591,210 @@ class CustomerSegments(BaseModel):
     avg_redemptions_per_customer: float
     total_savings_provided: float
     characteristics: List[str]
+
+
+
+# app/schemas/business.py - Updated Offer Schemas
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Optional, Dict, Any
+from datetime import datetime
+from decimal import Decimal
+import uuid
+
+# ============================================================================
+# UPDATED OFFER SCHEMAS
+# ============================================================================
+
+class OfferBase(BaseModel):
+    title: str = Field(..., min_length=3, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+    discount_type: str = Field(..., pattern="^(percentage|fixed|minimum_purchase|quantity_discount|bogo)$")
+    discount_value: float = Field(..., ge=0)  # Now allows 0 for BOGO offers
+    original_price: Optional[float] = Field(None, ge=0)
+    discounted_price: Optional[float] = Field(None, ge=0)
+    start_date: datetime
+    expiry_date: datetime
+    max_claims: Optional[int] = Field(None, gt=0)
+    terms_conditions: Optional[str] = Field(None, max_length=2000)
+    product_id: Optional[uuid.UUID] = None
+    
+    # New fields for different offer types
+    minimum_purchase_amount: Optional[float] = Field(None, ge=0, description="Minimum purchase required (for minimum_purchase offers)")
+    minimum_quantity: Optional[int] = Field(None, gt=0, description="Minimum quantity required (for quantity_discount offers)")
+    buy_quantity: Optional[int] = Field(None, gt=0, description="Number of items to buy (for BOGO offers)")
+    get_quantity: Optional[int] = Field(None, gt=0, description="Number of items to get (for BOGO offers)")
+    get_discount_percentage: Optional[float] = Field(None, ge=0, le=100, description="Discount percentage for get items (for BOGO offers)")
+    offer_parameters: Optional[Dict[str, Any]] = Field(None, description="Additional offer-specific parameters")
+
+    @field_validator('discount_value')
+    @classmethod
+    def validate_discount_value(cls, v, info):
+        discount_type = info.data.get('discount_type')
+        if discount_type == 'percentage' and v > 100:
+            raise ValueError('Percentage discount cannot exceed 100%')
+        return v
+
+    @field_validator('expiry_date')
+    @classmethod
+    def validate_dates(cls, v, info):
+        if 'start_date' in info.data and v <= info.data['start_date']:
+            raise ValueError('Expiry date must be after start date')
+        return v
+
+    @field_validator('discounted_price')
+    @classmethod
+    def validate_discounted_price(cls, v, info):
+        original_price = info.data.get('original_price')
+        if v is not None and original_price is not None and v >= original_price:
+            raise ValueError('Discounted price must be less than original price')
+        return v
+
+    @field_validator('minimum_purchase_amount')
+    @classmethod
+    def validate_minimum_purchase(cls, v, info):
+        discount_type = info.data.get('discount_type')
+        if discount_type == 'minimum_purchase' and v is None:
+            raise ValueError('minimum_purchase_amount is required for minimum_purchase offers')
+        if discount_type != 'minimum_purchase' and v is not None:
+            raise ValueError('minimum_purchase_amount should only be set for minimum_purchase offers')
+        return v
+
+    @field_validator('minimum_quantity')
+    @classmethod
+    def validate_minimum_quantity(cls, v, info):
+        discount_type = info.data.get('discount_type')
+        if discount_type == 'quantity_discount' and v is None:
+            raise ValueError('minimum_quantity is required for quantity_discount offers')
+        if discount_type != 'quantity_discount' and v is not None:
+            raise ValueError('minimum_quantity should only be set for quantity_discount offers')
+        return v
+
+    @field_validator('buy_quantity')
+    @classmethod
+    def validate_buy_quantity(cls, v, info):
+        discount_type = info.data.get('discount_type')
+        if discount_type == 'bogo' and v is None:
+            raise ValueError('buy_quantity is required for BOGO offers')
+        if discount_type != 'bogo' and v is not None:
+            raise ValueError('buy_quantity should only be set for BOGO offers')
+        return v
+
+    @field_validator('get_quantity')
+    @classmethod
+    def validate_get_quantity(cls, v, info):
+        discount_type = info.data.get('discount_type')
+        if discount_type == 'bogo' and v is None:
+            raise ValueError('get_quantity is required for BOGO offers')
+        if discount_type != 'bogo' and v is not None:
+            raise ValueError('get_quantity should only be set for BOGO offers')
+        return v
+
+    @field_validator('get_discount_percentage')
+    @classmethod
+    def validate_get_discount_percentage(cls, v, info):
+        discount_type = info.data.get('discount_type')
+        if discount_type == 'bogo' and v is None:
+            raise ValueError('get_discount_percentage is required for BOGO offers')
+        if discount_type != 'bogo' and v is not None:
+            raise ValueError('get_discount_percentage should only be set for BOGO offers')
+        return v
+
+
+class OfferCreate(OfferBase):
+    """Schema for creating new offers"""
+    pass
+
+
+class OfferUpdate(BaseModel):
+    """Schema for updating existing offers"""
+    title: Optional[str] = Field(None, min_length=3, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+    discount_type: Optional[str] = Field(None, pattern="^(percentage|fixed|minimum_purchase|quantity_discount|bogo)$")
+    discount_value: Optional[float] = Field(None, ge=0)
+    original_price: Optional[float] = Field(None, ge=0)
+    discounted_price: Optional[float] = Field(None, ge=0)
+    start_date: Optional[datetime] = None
+    expiry_date: Optional[datetime] = None
+    max_claims: Optional[int] = Field(None, gt=0)
+    terms_conditions: Optional[str] = Field(None, max_length=2000)
+    product_id: Optional[uuid.UUID] = None
+    is_active: Optional[bool] = None
+    
+    # New fields for different offer types
+    minimum_purchase_amount: Optional[float] = Field(None, ge=0)
+    minimum_quantity: Optional[int] = Field(None, gt=0)
+    buy_quantity: Optional[int] = Field(None, gt=0)
+    get_quantity: Optional[int] = Field(None, gt=0)
+    get_discount_percentage: Optional[float] = Field(None, ge=0, le=100)
+    offer_parameters: Optional[Dict[str, Any]] = None
+
+
+class OfferResponse(OfferBase):
+    """Schema for offer responses"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: uuid.UUID
+    business_id: uuid.UUID
+    current_claims: int
+    is_active: bool
+    created_at: datetime
+    product: Optional['ProductResponse'] = None
+    business: Optional['BusinessSummary'] = None
+    
+    @field_validator('discount_value', 'original_price', 'discounted_price', 
+                    'minimum_purchase_amount', 'get_discount_percentage', mode='before')
+    @classmethod
+    def convert_decimal_to_float(cls, v):
+        """Convert Decimal to float for JSON serialization"""
+        if isinstance(v, Decimal):
+            return float(v)
+        return v
+
+
+# ============================================================================
+# OFFER CALCULATION UTILITIES
+# ============================================================================
+
+class OfferCalculationResult(BaseModel):
+    """Result of offer calculation"""
+    is_valid: bool
+    final_price: float
+    discount_amount: float
+    savings_amount: float
+    message: str
+    error_reason: Optional[str] = None
+
+
+class OfferCalculationRequest(BaseModel):
+    """Request for calculating offer discount"""
+    offer_id: uuid.UUID
+    quantity: int = Field(..., gt=0)
+    cart_total: Optional[float] = Field(None, ge=0)
+    
+    
+# ============================================================================
+# OFFER DISPLAY HELPERS
+# ============================================================================
+
+class OfferDisplayInfo(BaseModel):
+    """Processed offer information for frontend display"""
+    offer_id: uuid.UUID
+    title: str
+    description: Optional[str]
+    discount_type: str
+    display_text: str  # Human-readable offer description
+    savings_text: str  # e.g., "Save up to $10"
+    conditions_text: Optional[str]  # e.g., "Minimum purchase $50"
+    is_available: bool
+    reason_unavailable: Optional[str] = None
+
+
+# ============================================================================
+# BUSINESS SUMMARY FOR OFFERS
+# ============================================================================
+
+class BusinessSummary(BaseModel):
+    """Simplified business info for offer responses"""
+    business_name: str
+    is_verified: bool
+    avatar_url: Optional[str] = None

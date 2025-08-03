@@ -917,12 +917,14 @@ async def list_my_offers(
         )
 
 
+# Updated app/api/routes/business.py - Replace the existing create_offer function
+
 @router.post("/offers", response_model=dict)
 async def create_offer(
-    offer_data: dict,  # Use dict to handle the frontend data structure
+    offer_data: dict,  # Use dict to handle all discount types
     current_user: UserProfile = Depends(get_current_business_user)
 ):
-    """Create a new offer for the current business"""
+    """Create a new offer for the current business - supports all discount types"""
     
     try:
         print(f"Creating offer for user: {current_user.id}")
@@ -954,25 +956,89 @@ async def create_offer(
                 detail="Product ID is required"
             )
         
+        # Validate discount type
+        discount_type = offer_data.get("discount_type")
+        if not discount_type:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Discount type is required"
+            )
+        
+        allowed_discount_types = ["percentage", "fixed", "minimum_purchase", "quantity_discount", "bogo"]
+        if discount_type not in allowed_discount_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid discount type. Must be one of: {', '.join(allowed_discount_types)}"
+            )
+        
+        # Validate required fields based on discount type
+        if discount_type in ["percentage", "fixed"] and not offer_data.get("discount_value"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"discount_value is required for {discount_type} offers"
+            )
+        
+        if discount_type == "minimum_purchase":
+            if not offer_data.get("discount_value") or not offer_data.get("minimum_purchase_amount"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="discount_value and minimum_purchase_amount are required for minimum_purchase offers"
+                )
+        
+        if discount_type == "quantity_discount":
+            if not offer_data.get("discount_value") or not offer_data.get("minimum_quantity"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="discount_value and minimum_quantity are required for quantity_discount offers"
+                )
+        
+        if discount_type == "bogo":
+            required_bogo_fields = ["buy_quantity", "get_quantity", "get_discount_percentage"]
+            missing_fields = [field for field in required_bogo_fields if not offer_data.get(field)]
+            if missing_fields:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"BOGO offers require: {', '.join(missing_fields)}"
+                )
+        
         # Generate offer title if not provided
-        if not offer_data.get("title"):
-            offer_data["title"] = f"{offer_data['discount_percentage']}% Off {product['name']}"
+        title = offer_data.get("title")
+        if not title:
+            product_name = product['name']
+            if discount_type == "percentage":
+                title = f"{offer_data['discount_value']}% Off {product_name}"
+            elif discount_type == "fixed":
+                title = f"${offer_data['discount_value']} Off {product_name}"
+            elif discount_type == "minimum_purchase":
+                title = f"${offer_data['discount_value']} Off {product_name} (Min. Purchase ${offer_data['minimum_purchase_amount']})"
+            elif discount_type == "quantity_discount":
+                title = f"Buy {offer_data['minimum_quantity']}+ {product_name} Get {offer_data['discount_value']}% Off Each"
+            elif discount_type == "bogo":
+                discount_text = "Free" if offer_data['get_discount_percentage'] == 100 else f"{offer_data['get_discount_percentage']}% Off"
+                title = f"Buy {offer_data['buy_quantity']} {product_name} Get {offer_data['get_quantity']} {discount_text}"
         
-        # Calculate prices
+        # Calculate prices for simple discount types
         original_price = float(product["price"]) if product["price"] else 0
-        discount_percentage = float(offer_data["discount_percentage"])
-        discount_amount = original_price * (discount_percentage / 100)
-        discounted_price = original_price - discount_amount
+        discounted_price = original_price  # Default to original price
         
-        # Create offer record
+        if discount_type == "percentage":
+            discount_percentage = float(offer_data["discount_value"])
+            discount_amount = original_price * (discount_percentage / 100)
+            discounted_price = original_price - discount_amount
+        elif discount_type == "fixed":
+            discount_amount = min(float(offer_data["discount_value"]), original_price)
+            discounted_price = original_price - discount_amount
+        # For other types, discounted_price is calculated dynamically
+        
+        # Create offer record with all new fields
         offer_dict = {
             "id": str(uuid.uuid4()),
             "business_id": business_id,
             "product_id": offer_data["product_id"],
-            "title": offer_data["title"],
+            "title": title,
             "description": offer_data.get("description"),
-            "discount_type": "percentage",
-            "discount_value": discount_percentage,
+            "discount_type": discount_type,
+            "discount_value": float(offer_data.get("discount_value", 0)) if offer_data.get("discount_value") else None,
             "original_price": original_price,
             "discounted_price": discounted_price,
             "start_date": offer_data["start_date"],
@@ -980,8 +1046,19 @@ async def create_offer(
             "max_claims": int(offer_data["max_claims"]) if offer_data.get("max_claims") else None,
             "current_claims": 0,
             "is_active": offer_data.get("is_active", True),
-            "terms_conditions": offer_data.get("terms_conditions")
+            "terms_conditions": offer_data.get("terms_conditions"),
+            
+            # New fields for different offer types
+            "minimum_purchase_amount": float(offer_data.get("minimum_purchase_amount")) if offer_data.get("minimum_purchase_amount") else None,
+            "minimum_quantity": int(offer_data.get("minimum_quantity")) if offer_data.get("minimum_quantity") else None,
+            "buy_quantity": int(offer_data.get("buy_quantity")) if offer_data.get("buy_quantity") else None,
+            "get_quantity": int(offer_data.get("get_quantity")) if offer_data.get("get_quantity") else None,
+            "get_discount_percentage": float(offer_data.get("get_discount_percentage")) if offer_data.get("get_discount_percentage") else None,
+            "offer_parameters": offer_data.get("offer_parameters")
         }
+        
+        # Remove None values to avoid database issues
+        offer_dict = {k: v for k, v in offer_dict.items() if v is not None}
         
         # Convert data for Supabase
         offer_dict = prepare_data_for_supabase(offer_dict)
@@ -1020,7 +1097,6 @@ async def create_offer(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Offer creation failed: {str(e)}"
         )
-
 
 @router.get("/offers/{offer_id}", response_model=dict)
 async def get_offer(
@@ -1069,13 +1145,15 @@ async def get_offer(
         )
 
 
+# Updated app/api/routes/business.py - Replace the existing update_offer function
+
 @router.patch("/offers/{offer_id}", response_model=dict)
 async def update_offer(
     offer_id: str,
-    offer_update: dict,  # Use dict to handle frontend data structure
+    offer_update: dict,  # Accept flexible dict for all offer types
     current_user: UserProfile = Depends(get_current_business_user)
 ):
-    """Update an offer owned by the current business"""
+    """Update an offer owned by the current business - supports all offer types"""
     
     try:
         # Get user's business
@@ -1103,29 +1181,98 @@ async def update_offer(
         # Prepare update data
         update_data = {}
         
-        # Update fields that are provided
-        if "discount_percentage" in offer_update:
-            discount_percentage = float(offer_update["discount_percentage"])
-            update_data["discount_value"] = discount_percentage
-            
-            # Recalculate prices if discount changed
-            original_price = float(current_data["products"]["price"]) if current_data["products"]["price"] else 0
-            discount_amount = original_price * (discount_percentage / 100)
-            discounted_price = original_price - discount_amount
-            update_data["discounted_price"] = discounted_price
-        
-        # Map frontend fields to database fields
+        # Map all possible fields (both old and new format)
         field_mapping = {
-            "discount_code": "discount_code",
+            "title": "title",
+            "description": "description",
+            "discount_type": "discount_type",
+            "discount_value": "discount_value",
+            "discount_percentage": "discount_value",  # Map old field to new
             "start_date": "start_date",
             "expiry_date": "expiry_date",
+            "max_claims": "max_claims",
             "is_active": "is_active",
-            "max_claims": "max_claims"
+            "terms_conditions": "terms_conditions",
+            # New fields for different offer types
+            "minimum_purchase_amount": "minimum_purchase_amount",
+            "minimum_quantity": "minimum_quantity",
+            "buy_quantity": "buy_quantity",
+            "get_quantity": "get_quantity",
+            "get_discount_percentage": "get_discount_percentage",
+            "offer_parameters": "offer_parameters"
         }
         
+        # Apply updates for fields that are provided
         for frontend_field, db_field in field_mapping.items():
             if frontend_field in offer_update:
-                update_data[db_field] = offer_update[frontend_field]
+                value = offer_update[frontend_field]
+                
+                # Type conversion based on field
+                if db_field in ["discount_value", "minimum_purchase_amount", "get_discount_percentage"]:
+                    if value is not None:
+                        update_data[db_field] = float(value)
+                elif db_field in ["minimum_quantity", "buy_quantity", "get_quantity", "max_claims"]:
+                    if value is not None:
+                        update_data[db_field] = int(value)
+                else:
+                    update_data[db_field] = value
+        
+        # Validate offer data if discount_type is being changed
+        if "discount_type" in offer_update:
+            discount_type = offer_update["discount_type"]
+            allowed_types = ["percentage", "fixed", "minimum_purchase", "quantity_discount", "bogo"]
+            
+            if discount_type not in allowed_types:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid discount type. Must be one of: {', '.join(allowed_types)}"
+                )
+            
+            # Validate required fields for the new discount type
+            merged_data = {**current_data, **offer_update}
+            
+            if discount_type in ["percentage", "fixed"] and not merged_data.get("discount_value"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"discount_value is required for {discount_type} offers"
+                )
+            
+            if discount_type == "minimum_purchase":
+                if not merged_data.get("discount_value") or not merged_data.get("minimum_purchase_amount"):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="discount_value and minimum_purchase_amount are required for minimum_purchase offers"
+                    )
+            
+            if discount_type == "quantity_discount":
+                if not merged_data.get("discount_value") or not merged_data.get("minimum_quantity"):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="discount_value and minimum_quantity are required for quantity_discount offers"
+                    )
+            
+            if discount_type == "bogo":
+                required_bogo_fields = ["buy_quantity", "get_quantity", "get_discount_percentage"]
+                missing_fields = [field for field in required_bogo_fields if not merged_data.get(field)]
+                if missing_fields:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"BOGO offers require: {', '.join(missing_fields)}"
+                    )
+        
+        # Recalculate prices if discount values change
+        if any(field in offer_update for field in ["discount_value", "discount_percentage", "discount_type"]):
+            original_price = float(current_data["products"]["price"]) if current_data["products"]["price"] else 0
+            discount_type = offer_update.get("discount_type", current_data.get("discount_type"))
+            discount_value = offer_update.get("discount_value", offer_update.get("discount_percentage", current_data.get("discount_value", 0)))
+            
+            if discount_type == "percentage":
+                discount_amount = original_price * (float(discount_value) / 100)
+                update_data["discounted_price"] = original_price - discount_amount
+            elif discount_type == "fixed":
+                discount_amount = min(float(discount_value), original_price)
+                update_data["discounted_price"] = original_price - discount_amount
+            # For other types, discounted_price is calculated dynamically
         
         if not update_data:
             raise HTTPException(
@@ -1133,10 +1280,13 @@ async def update_offer(
                 detail="No valid fields to update"
             )
         
-        update_data["updated_at"] = datetime.utcnow().isoformat()
+        # Remove None values
+        update_data = {k: v for k, v in update_data.items() if v is not None}
         
         # Convert data for Supabase
         update_data = prepare_data_for_supabase(update_data)
+        
+        print(f"Updating offer {offer_id} with data: {update_data}")
         
         # Update offer
         result = supabase_admin.table("offers").update(update_data).eq("id", offer_id).eq("business_id", business_id).execute()
@@ -1168,7 +1318,323 @@ async def update_offer(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Offer update failed: {str(e)}"
         )
+    
+# Add this endpoint to app/api/routes/business.py
 
+@router.post("/offers/calculate", response_model=dict)
+async def calculate_offer_discount(
+    calculation_request: dict,
+    current_user: UserProfile = Depends(get_current_business_user)
+):
+    """Calculate discount for an offer based on quantity and cart total"""
+    
+    try:
+        offer_id = calculation_request.get("offer_id")
+        quantity = calculation_request.get("quantity", 1)
+        cart_total = calculation_request.get("cart_total")
+        
+        if not offer_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Offer ID is required"
+            )
+        
+        # Get user's business
+        business_result = supabase_admin.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
+        
+        if not business_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business not found"
+            )
+        
+        business_id = business_result.data[0]["id"]
+        
+        # Get offer with product info
+        offer_result = supabase_admin.table("offers").select(
+            "*, products(price)"
+        ).eq("id", offer_id).eq("business_id", business_id).execute()
+        
+        if not offer_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Offer not found"
+            )
+        
+        offer_data = offer_result.data[0]
+        item_price = float(offer_data["products"]["price"]) if offer_data["products"]["price"] else 0
+        
+        # Calculate discount using utility
+        calculation_result = calculate_discount_for_offer(
+            offer_data=offer_data,
+            quantity=quantity,
+            cart_total=cart_total,
+            item_price=item_price
+        )
+        
+        return {
+            "calculation": calculation_result,
+            "offer_display_text": get_offer_display_text(offer_data)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error calculating offer discount: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Calculation failed: {str(e)}"
+        )
+
+
+# Utility functions for offer calculations
+def calculate_discount_for_offer(offer_data: dict, quantity: int, cart_total: float = None, item_price: float = 0) -> dict:
+    """Calculate discount based on offer type"""
+    
+    discount_type = offer_data.get('discount_type')
+    
+    if discount_type == 'percentage':
+        return calculate_percentage_discount(offer_data, quantity, item_price)
+    elif discount_type == 'fixed':
+        return calculate_fixed_discount(offer_data, quantity, item_price)
+    elif discount_type == 'minimum_purchase':
+        return calculate_minimum_purchase_discount(offer_data, cart_total, quantity)
+    elif discount_type == 'quantity_discount':
+        return calculate_quantity_discount(offer_data, quantity, item_price)
+    elif discount_type == 'bogo':
+        return calculate_bogo_discount(offer_data, quantity, item_price)
+    else:
+        return {
+            'is_valid': False,
+            'error_reason': f'Unknown discount type: {discount_type}',
+            'discount_amount': 0,
+            'final_price': item_price * quantity if item_price else 0,
+            'savings_amount': 0,
+            'message': 'Invalid offer type'
+        }
+
+
+def calculate_percentage_discount(offer_data: dict, quantity: int, item_price: float) -> dict:
+    """Calculate percentage discount"""
+    if not item_price:
+        return {
+            'is_valid': False,
+            'error_reason': 'Item price required for percentage discount',
+            'discount_amount': 0,
+            'final_price': 0,
+            'savings_amount': 0,
+            'message': 'Cannot calculate without item price'
+        }
+    
+    discount_percentage = float(offer_data.get('discount_value', 0))
+    total_price = item_price * quantity
+    discount_amount = total_price * (discount_percentage / 100)
+    final_price = total_price - discount_amount
+    
+    return {
+        'is_valid': True,
+        'discount_amount': round(discount_amount, 2),
+        'final_price': round(final_price, 2),
+        'savings_amount': round(discount_amount, 2),
+        'message': f'{discount_percentage}% off - Save ${discount_amount:.2f}'
+    }
+
+
+def calculate_fixed_discount(offer_data: dict, quantity: int, item_price: float) -> dict:
+    """Calculate fixed dollar discount"""
+    if not item_price:
+        return {
+            'is_valid': False,
+            'error_reason': 'Item price required for fixed discount',
+            'discount_amount': 0,
+            'final_price': 0,
+            'savings_amount': 0,
+            'message': 'Cannot calculate without item price'
+        }
+    
+    discount_amount = float(offer_data.get('discount_value', 0))
+    total_price = item_price * quantity
+    
+    # Don't allow discount to exceed total price
+    actual_discount = min(discount_amount, total_price)
+    final_price = total_price - actual_discount
+    
+    return {
+        'is_valid': True,
+        'discount_amount': round(actual_discount, 2),
+        'final_price': round(final_price, 2),
+        'savings_amount': round(actual_discount, 2),
+        'message': f'${actual_discount:.2f} off'
+    }
+
+
+def calculate_minimum_purchase_discount(offer_data: dict, cart_total: float, quantity: int) -> dict:
+    """Calculate minimum purchase discount"""
+    minimum_purchase = float(offer_data.get('minimum_purchase_amount', 0))
+    discount_value = float(offer_data.get('discount_value', 0))
+    
+    if cart_total is None:
+        return {
+            'is_valid': False,
+            'error_reason': 'Cart total required for minimum purchase discount',
+            'discount_amount': 0,
+            'final_price': 0,
+            'savings_amount': 0,
+            'message': 'Cannot calculate without cart total'
+        }
+    
+    if cart_total < minimum_purchase:
+        return {
+            'is_valid': False,
+            'error_reason': f'Minimum purchase of ${minimum_purchase:.2f} required',
+            'discount_amount': 0,
+            'final_price': cart_total,
+            'savings_amount': 0,
+            'message': f'Add ${minimum_purchase - cart_total:.2f} more to qualify'
+        }
+    
+    # Don't allow discount to exceed cart total
+    actual_discount = min(discount_value, cart_total)
+    final_price = cart_total - actual_discount
+    
+    return {
+        'is_valid': True,
+        'discount_amount': round(actual_discount, 2),
+        'final_price': round(final_price, 2),
+        'savings_amount': round(actual_discount, 2),
+        'message': f'${actual_discount:.2f} off orders over ${minimum_purchase:.2f}'
+    }
+
+
+def calculate_quantity_discount(offer_data: dict, quantity: int, item_price: float) -> dict:
+    """Calculate quantity-based discount"""
+    if not item_price:
+        return {
+            'is_valid': False,
+            'error_reason': 'Item price required for quantity discount',
+            'discount_amount': 0,
+            'final_price': 0,
+            'savings_amount': 0,
+            'message': 'Cannot calculate without item price'
+        }
+    
+    minimum_quantity = int(offer_data.get('minimum_quantity', 1))
+    discount_percentage = float(offer_data.get('discount_value', 0))
+    
+    if quantity < minimum_quantity:
+        total_price = item_price * quantity
+        return {
+            'is_valid': False,
+            'error_reason': f'Minimum quantity of {minimum_quantity} required',
+            'discount_amount': 0,
+            'final_price': total_price,
+            'savings_amount': 0,
+            'message': f'Add {minimum_quantity - quantity} more to qualify for {discount_percentage}% off'
+        }
+    
+    total_price = item_price * quantity
+    discount_amount = total_price * (discount_percentage / 100)
+    final_price = total_price - discount_amount
+    
+    return {
+        'is_valid': True,
+        'discount_amount': round(discount_amount, 2),
+        'final_price': round(final_price, 2),
+        'savings_amount': round(discount_amount, 2),
+        'message': f'Buy {minimum_quantity}+ get {discount_percentage}% off each - Save ${discount_amount:.2f}'
+    }
+
+
+def calculate_bogo_discount(offer_data: dict, quantity: int, item_price: float) -> dict:
+    """Calculate Buy X Get Y discount"""
+    if not item_price:
+        return {
+            'is_valid': False,
+            'error_reason': 'Item price required for BOGO discount',
+            'discount_amount': 0,
+            'final_price': 0,
+            'savings_amount': 0,
+            'message': 'Cannot calculate without item price'
+        }
+    
+    buy_quantity = int(offer_data.get('buy_quantity', 1))
+    get_quantity = int(offer_data.get('get_quantity', 1))
+    get_discount_percentage = float(offer_data.get('get_discount_percentage', 100))
+    
+    if quantity < buy_quantity:
+        total_price = item_price * quantity
+        return {
+            'is_valid': False,
+            'error_reason': f'Need to buy {buy_quantity} items to qualify',
+            'discount_amount': 0,
+            'final_price': total_price,
+            'savings_amount': 0,
+            'message': f'Add {buy_quantity - quantity} more to get {get_quantity} free'
+        }
+    
+    # Calculate how many complete BOGO sets the customer qualifies for
+    bogo_sets = quantity // buy_quantity
+    free_items = min(bogo_sets * get_quantity, quantity - (bogo_sets * buy_quantity))
+    
+    # Calculate discount
+    total_price = item_price * quantity
+    discount_per_free_item = item_price * (get_discount_percentage / 100)
+    total_discount = free_items * discount_per_free_item
+    final_price = total_price - total_discount
+    
+    # Create descriptive message
+    if get_discount_percentage == 100:
+        message = f'Buy {buy_quantity} Get {get_quantity} Free - Save ${total_discount:.2f}'
+    else:
+        message = f'Buy {buy_quantity} Get {get_quantity} at {get_discount_percentage}% off - Save ${total_discount:.2f}'
+    
+    return {
+        'is_valid': True,
+        'discount_amount': round(total_discount, 2),
+        'final_price': round(final_price, 2),
+        'savings_amount': round(total_discount, 2),
+        'message': message,
+        'bogo_details': {
+            'bogo_sets': bogo_sets,
+            'free_items': free_items,
+            'remaining_items': quantity - (bogo_sets * buy_quantity) - free_items
+        }
+    }
+
+
+def get_offer_display_text(offer_data: dict) -> str:
+    """Generate human-readable display text for an offer"""
+    discount_type = offer_data.get('discount_type')
+    
+    if discount_type == 'percentage':
+        percentage = offer_data.get('discount_value', 0)
+        return f"{percentage}% Off"
+    
+    elif discount_type == 'fixed':
+        amount = offer_data.get('discount_value', 0)
+        return f"${amount} Off"
+    
+    elif discount_type == 'minimum_purchase':
+        amount = offer_data.get('discount_value', 0)
+        minimum = offer_data.get('minimum_purchase_amount', 0)
+        return f"${amount} Off Orders Over ${minimum}"
+    
+    elif discount_type == 'quantity_discount':
+        percentage = offer_data.get('discount_value', 0)
+        min_qty = offer_data.get('minimum_quantity', 0)
+        return f"Buy {min_qty}+ Get {percentage}% Off Each"
+    
+    elif discount_type == 'bogo':
+        buy_qty = offer_data.get('buy_quantity', 1)
+        get_qty = offer_data.get('get_quantity', 1)
+        discount_pct = offer_data.get('get_discount_percentage', 100)
+        
+        if discount_pct == 100:
+            return f"Buy {buy_qty} Get {get_qty} Free"
+        else:
+            return f"Buy {buy_qty} Get {get_qty} at {discount_pct}% Off"
+    
+    return "Special Offer"
 
 @router.patch("/offers/{offer_id}/status", response_model=dict)
 async def update_offer_status(
@@ -1808,3 +2274,5 @@ async def get_redemption_stats(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get redemption stats: {str(e)}"
         )
+    
+

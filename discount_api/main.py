@@ -94,6 +94,7 @@ app.include_router(categories.router, prefix="/api/v1")
 app.include_router(business.router, prefix="/api/v1")
 app.include_router(customer.router, prefix="/api/v1")
 
+
 @app.get("/")
 async def root():
     """Root endpoint"""
