@@ -66,7 +66,7 @@ export default function BusinessLogin() {
       login(result.user)
       
       setTimeout(() => {
-        router.push('/dashboard')
+        router.push('/business/dashboard')
       }, 100)
       
     } catch (err) {

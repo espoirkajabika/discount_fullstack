@@ -1,0 +1,285 @@
+// lib/products.js
+import { makeAuthenticatedRequest } from './auth'
+
+/**
+ * Get all products for current business with pagination and filters
+ */
+export async function getProducts(params = {}) {
+  try {
+    const queryParams = new URLSearchParams()
+    
+    // Add pagination
+    if (params.page) queryParams.append('page', params.page)
+    if (params.limit) queryParams.append('limit', params.limit)
+    
+    // Add sorting
+    if (params.sortBy) queryParams.append('sortBy', params.sortBy)
+    if (params.sortOrder) queryParams.append('sortOrder', params.sortOrder)
+    
+    // Add search
+    if (params.search) queryParams.append('search', params.search)
+    
+    // Add category filter
+    if (params.category_id) queryParams.append('category_id', params.category_id)
+    
+    const url = `/business/products${queryParams.toString() ? '?' + queryParams.toString() : ''}`
+    const response = await makeAuthenticatedRequest(url)
+    
+    if (!response || !response.ok) {
+      const data = await response?.json()
+      return { error: data?.detail || 'Failed to fetch products' }
+    }
+    
+    const data = await response.json()
+    return { 
+      success: true, 
+      products: data.products || [],
+      pagination: data.pagination || {}
+    }
+  } catch (error) {
+    console.error('Get products error:', error)
+    return { error: 'Network error. Please try again.' }
+  }
+}
+
+/**
+ * Get single product by ID
+ */
+export async function getProduct(productId) {
+  try {
+    const response = await makeAuthenticatedRequest(`/business/products/${productId}`)
+    
+    if (!response || !response.ok) {
+      const data = await response?.json()
+      return { error: data?.detail || 'Product not found' }
+    }
+    
+    const data = await response.json()
+    return { success: true, product: data.product || data }
+  } catch (error) {
+    console.error('Get product error:', error)
+    return { error: 'Network error. Please try again.' }
+  }
+}
+
+/**
+ * Create new product
+ */
+export async function createProduct(productData) {
+  try {
+    console.log('Creating product with data:', productData)
+    
+    const response = await makeAuthenticatedRequest('/business/products', {
+      method: 'POST',
+      body: JSON.stringify(productData),
+    })
+    
+    if (!response || !response.ok) {
+      const data = await response?.json()
+      console.error('Product creation failed:', data)
+      
+      if (data && data.detail) {
+        if (Array.isArray(data.detail)) {
+          const errorMessages = data.detail.map(err => {
+            const field = err.loc ? err.loc[err.loc.length - 1] : 'field'
+            return `${field}: ${err.msg}`
+          }).join(', ')
+          return { error: `Validation errors - ${errorMessages}` }
+        } else {
+          return { error: data.detail }
+        }
+      }
+      return { error: 'Failed to create product' }
+    }
+    
+    const data = await response.json()
+    console.log('Product created successfully:', data)
+    
+    return { success: true, product: data.product || data }
+  } catch (error) {
+    console.error('Create product error:', error)
+    return { error: 'Network error. Please try again.' }
+  }
+}
+
+/**
+ * Update existing product
+ */
+export async function updateProduct(productId, productData) {
+  try {
+    console.log('Updating product:', productId, 'with data:', productData)
+    
+    const response = await makeAuthenticatedRequest(`/business/products/${productId}`, {
+      method: 'PUT',
+      body: JSON.stringify(productData),
+    })
+    
+    if (!response || !response.ok) {
+      const data = await response?.json()
+      console.error('Product update failed:', data)
+      
+      if (data && data.detail) {
+        if (Array.isArray(data.detail)) {
+          const errorMessages = data.detail.map(err => {
+            const field = err.loc ? err.loc[err.loc.length - 1] : 'field'
+            return `${field}: ${err.msg}`
+          }).join(', ')
+          return { error: `Validation errors - ${errorMessages}` }
+        } else {
+          return { error: data.detail }
+        }
+      }
+      return { error: 'Failed to update product' }
+    }
+    
+    const data = await response.json()
+    console.log('Product updated successfully:', data)
+    
+    return { success: true, product: data.product || data }
+  } catch (error) {
+    console.error('Update product error:', error)
+    return { error: 'Network error. Please try again.' }
+  }
+}
+
+/**
+ * Delete product
+ */
+export async function deleteProduct(productId) {
+  try {
+    const response = await makeAuthenticatedRequest(`/business/products/${productId}`, {
+      method: 'DELETE',
+    })
+    
+    if (!response || !response.ok) {
+      const data = await response?.json()
+      return { error: data?.detail || 'Failed to delete product' }
+    }
+    
+    return { success: true }
+  } catch (error) {
+    console.error('Delete product error:', error)
+    return { error: 'Network error. Please try again.' }
+  }
+}
+
+/**
+ * Upload product image
+ */
+export async function uploadProductImage(imageFile) {
+  try {
+    console.log('Uploading image file:', imageFile.name, imageFile.size, 'bytes')
+    
+    const formData = new FormData()
+    formData.append('image', imageFile)
+
+    // Get the token for authorization
+    const token = localStorage.getItem('auth_token')
+    if (!token) {
+      return { error: 'Authentication required' }
+    }
+
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'
+    const response = await fetch(`${API_BASE_URL}/business/products/upload-image`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
+    })
+
+    if (!response.ok) {
+      const data = await response.json()
+      console.error('Image upload failed:', data)
+      return { error: data.detail || 'Failed to upload image' }
+    }
+
+    const data = await response.json()
+    console.log('Image uploaded successfully:', data)
+    
+    return { 
+      success: true, 
+      path: data.path, 
+      url: data.url,
+      compression_info: data.compression_info
+    }
+  } catch (error) {
+    console.error('Upload image error:', error)
+    return { error: 'Network error. Please try again.' }
+  }
+}
+
+/**
+ * Get product offers
+ */
+export async function getProductOffers(productId, params = {}) {
+  try {
+    const queryParams = new URLSearchParams()
+    if (params.page) queryParams.append('page', params.page)
+    if (params.limit) queryParams.append('limit', params.limit)
+    
+    const url = `/business/products/${productId}/offers${queryParams.toString() ? '?' + queryParams.toString() : ''}`
+    const response = await makeAuthenticatedRequest(url)
+    
+    if (!response || !response.ok) {
+      const data = await response?.json()
+      return { error: data?.detail || 'Failed to fetch product offers' }
+    }
+    
+    const data = await response.json()
+    return { 
+      success: true, 
+      offers: data.offers || [],
+      pagination: data.pagination || {}
+    }
+  } catch (error) {
+    console.error('Get product offers error:', error)
+    return { error: 'Network error. Please try again.' }
+  }
+}
+
+/**
+ * Get product categories
+ */
+export async function getCategories() {
+  try {
+    const response = await makeAuthenticatedRequest('/categories')
+    
+    if (!response || !response.ok) {
+      const data = await response?.json()
+      return { error: data?.detail || 'Failed to fetch categories' }
+    }
+    
+    const data = await response.json()
+    return { 
+      success: true, 
+      categories: data.categories || data || []
+    }
+  } catch (error) {
+    console.error('Get categories error:', error)
+    return { error: 'Network error. Please try again.' }
+  }
+}
+
+/**
+ * Create new category
+ */
+export async function createCategory(categoryData) {
+  try {
+    const response = await makeAuthenticatedRequest('/categories', {
+      method: 'POST',
+      body: JSON.stringify(categoryData),
+    })
+    
+    if (!response || !response.ok) {
+      const data = await response?.json()
+      return { error: data?.detail || 'Failed to create category' }
+    }
+    
+    const data = await response.json()
+    return { success: true, category: data.category || data }
+  } catch (error) {
+    console.error('Create category error:', error)
+    return { error: 'Network error. Please try again.' }
+  }
+}
