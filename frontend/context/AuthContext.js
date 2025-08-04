@@ -1,344 +1,225 @@
+// context/AuthContext.js
 'use client'
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { 
-  getCurrentUser, 
-  getCurrentToken, 
-  isAuthenticated, 
-  isBusinessUser, 
-  isShopperUser,
-  signOut as authSignOut,
-  getUserProfile,
-  refreshToken,
-  clearSession
-} from '@/lib/auth'
+import React, { createContext, useContext, useState, useEffect } from 'react'
 
-// Create the context
-const AuthContext = createContext({
-  user: null,
-  token: null,
-  isLoading: true,
-  isAuthenticated: false,
-  isBusinessUser: false,
-  isShopperUser: false,
-  login: () => {},
-  logout: () => {},
-  updateUser: () => {},
-  checkAuth: () => {},
-})
+const AuthContext = createContext()
 
-// Auth provider component
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
-  const [token, setToken] = useState(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [loading, setLoading] = useState(true)
 
-  // Derived state
-  const authenticated = isAuthenticated()
-  const businessUser = isBusinessUser()
-  const shopperUser = isShopperUser()
+  // Check for existing auth on mount
+  useEffect(() => {
+    checkExistingAuth()
+  }, [])
 
-  /**
-   * Initialize auth state from localStorage
-   */
-  const initializeAuth = useCallback(() => {
+  const checkExistingAuth = async () => {
     try {
-      const storedUser = getCurrentUser()
-      const storedToken = getCurrentToken()
+      const token = localStorage.getItem('auth_token')
+      const userData = localStorage.getItem('auth_user')
 
-      if (storedUser && storedToken) {
-        setUser(storedUser)
-        setToken(storedToken)
+      if (token && userData) {
+        const parsedUser = JSON.parse(userData)
+        setUser(parsedUser)
+        
+        // Verify token is still valid
+        await verifyToken(token)
       }
     } catch (error) {
-      console.error('Error initializing auth:', error)
-      clearSession()
+      console.error('Auth check error:', error)
+      clearAuthData()
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
-  }, [])
+  }
 
-  /**
-   * Login function - called after successful authentication
-   */
-  const login = useCallback((userData, tokenData = null) => {
-    setUser(userData)
-    if (tokenData) {
-      setToken(tokenData)
-    }
-  }, [])
-
-  /**
-   * Logout function
-   */
-  const logout = useCallback(async () => {
-    setIsLoading(true)
+  const verifyToken = async (token) => {
     try {
-      await authSignOut()
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Token verification failed')
+      }
+
+      const userData = await response.json()
+      setUser(userData.user || userData)
+    } catch (error) {
+      console.error('Token verification failed:', error)
+      clearAuthData()
+    }
+  }
+
+  const login = async (email, password) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        // Handle different error formats more gracefully
+        let errorMessage = 'Login failed'
+        
+        if (data.detail) {
+          if (typeof data.detail === 'string') {
+            errorMessage = data.detail
+          } else if (Array.isArray(data.detail)) {
+            errorMessage = data.detail.map(err => err.msg || err).join(', ')
+          }
+        } else if (data.message) {
+          errorMessage = data.message
+        }
+        
+        return { error: errorMessage }
+      }
+
+      // Store auth data
+      localStorage.setItem('auth_token', data.access_token)
+      localStorage.setItem('auth_user', JSON.stringify(data.user))
+      
+      setUser(data.user)
+      
+      return { success: true, user: data.user }
+    } catch (error) {
+      console.error('Login error:', error)
+      return { error: error.message || 'Network error. Please try again.' }
+    }
+  }
+
+  const register = async (userData) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        // Handle different error formats more gracefully
+        let errorMessage = 'Registration failed'
+        
+        if (data.detail) {
+          if (typeof data.detail === 'string') {
+            errorMessage = data.detail
+          } else if (Array.isArray(data.detail)) {
+            errorMessage = data.detail.map(err => {
+              const field = err.loc ? err.loc[err.loc.length - 1] : 'field'
+              return `${field}: ${err.msg}`
+            }).join(', ')
+          }
+        } else if (data.message) {
+          errorMessage = data.message
+        }
+        
+        return { error: errorMessage }
+      }
+
+      // Store auth data
+      localStorage.setItem('auth_token', data.access_token)
+      localStorage.setItem('auth_user', JSON.stringify(data.user))
+      
+      setUser(data.user)
+      
+      return { success: true, user: data.user, token: data.access_token }
+    } catch (error) {
+      console.error('Registration error:', error)
+      return { error: error.message || 'Network error. Please try again.' }
+    }
+  }
+
+  // Business-specific registration - keep existing interface
+  const registerBusiness = async (businessData) => {
+    const userData = {
+      ...businessData,
+      is_business: true
+    }
+    return await register(userData)
+  }
+
+  // Customer-specific registration
+  const registerCustomer = async (customerData) => {
+    const userData = {
+      ...customerData,
+      is_business: false
+    }
+    return await register(userData)
+  }
+
+  const logout = async () => {
+    try {
+      const token = localStorage.getItem('auth_token')
+      
+      if (token) {
+        await fetch(`${API_BASE_URL}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        })
+      }
     } catch (error) {
       console.error('Logout error:', error)
     } finally {
-      setUser(null)
-      setToken(null)
-      setIsLoading(false)
-      // Redirect to home page
-      if (typeof window !== 'undefined') {
-        window.location.href = '/'
-      }
+      clearAuthData()
     }
-  }, [])
+  }
 
-  /**
-   * Update user data
-   */
-  const updateUser = useCallback((userData) => {
-    setUser(prevUser => ({
-      ...prevUser,
-      ...userData
-    }))
-  }, [])
+  const clearAuthData = () => {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('auth_user')
+    setUser(null)
+  }
 
-  /**
-   * Check authentication status and refresh if needed
-   */
-  const checkAuth = useCallback(async () => {
-    if (!token) return false
-
-    try {
-      // Try to get fresh user data from server
-      const result = await getUserProfile()
-      
-      if (result.user) {
-        setUser(result.user)
-        return true
-      } else {
-        // If failed, try to refresh token
-        const refreshResult = await refreshToken()
-        
-        if (refreshResult.token) {
-          setToken(refreshResult.token)
-          // Retry getting user profile
-          const retryResult = await getUserProfile()
-          if (retryResult.user) {
-            setUser(retryResult.user)
-            return true
-          }
-        }
-        
-        // If all fails, clear session
-        logout()
-        return false
-      }
-    } catch (error) {
-      console.error('Auth check failed:', error)
-      logout()
-      return false
+  // Add this login function that your existing signin page expects
+  const loginUser = (user, token = null) => {
+    if (token) {
+      localStorage.setItem('auth_token', token)
     }
-  }, [token, logout])
+    localStorage.setItem('auth_user', JSON.stringify(user))
+    setUser(user)
+  }
 
-  /**
-   * Auto-refresh token before expiration
-   */
-  const setupTokenRefresh = useCallback(() => {
-    if (!token || !user) return
-
-    // Refresh token every 25 minutes (tokens expire in 30 minutes)
-    const refreshInterval = setInterval(async () => {
-      try {
-        const result = await refreshToken()
-        if (result.token) {
-          setToken(result.token)
-        } else {
-          clearInterval(refreshInterval)
-          logout()
-        }
-      } catch (error) {
-        console.error('Auto refresh failed:', error)
-        clearInterval(refreshInterval)
-        logout()
-      }
-    }, 25 * 60 * 1000) // 25 minutes
-
-    return () => clearInterval(refreshInterval)
-  }, [token, user, logout])
-
-  /**
-   * Handle route protection
-   */
-  const requireAuth = useCallback((requiredUserType = null) => {
-    if (!authenticated) {
-      return { 
-        isAllowed: false, 
-        redirectTo: '/' 
-      }
-    }
-
-    if (requiredUserType === 'business' && !businessUser) {
-      return { 
-        isAllowed: false, 
-        redirectTo: '/business/auth/signin' 
-      }
-    }
-
-    if (requiredUserType === 'shopper' && !shopperUser) {
-      return { 
-        isAllowed: false, 
-        redirectTo: '/shoppers/auth/signin' 
-      }
-    }
-
-    return { 
-      isAllowed: true, 
-      redirectTo: null 
-    }
-  }, [authenticated, businessUser, shopperUser])
-
-  /**
-   * Handle page access for authenticated users
-   */
-  const redirectIfAuthenticated = useCallback(() => {
-    if (authenticated) {
-      if (businessUser) {
-        return '/business/dashboard'
-      } else if (shopperUser) {
-        return '/shoppers/dashboard'
-      }
-    }
-    return null
-  }, [authenticated, businessUser, shopperUser])
-
-  // Initialize auth on mount
-  useEffect(() => {
-    initializeAuth()
-  }, [initializeAuth])
-
-  // Setup token refresh when authenticated
-  useEffect(() => {
-    if (authenticated && token) {
-      return setupTokenRefresh()
-    }
-  }, [authenticated, token, setupTokenRefresh])
-
-  // Handle browser tab visibility changes to check auth
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && authenticated) {
-        checkAuth()
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [authenticated, checkAuth])
-
-  // Context value
-  const contextValue = {
-    // State
+  const value = {
     user,
-    token,
-    isLoading,
-    isAuthenticated: authenticated,
-    isBusinessUser: businessUser,
-    isShopperUser: shopperUser,
-    
-    // Actions
-    login,
+    loading,
+    login: loginUser,  // This is what your existing signin page expects
+    signIn: login,     // This is the API login function
+    register,
+    registerBusiness,
+    registerCustomer,
     logout,
-    updateUser,
-    checkAuth,
-    
-    // Utilities
-    requireAuth,
-    redirectIfAuthenticated,
+    clearAuthData
   }
 
   return (
-    <AuthContext.Provider value={contextValue}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )
 }
 
-// Custom hook to use auth context
 export function useAuth() {
   const context = useContext(AuthContext)
-  
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useAuth must be used within an AuthProvider')
   }
-  
   return context
 }
-
-// HOC for protected routes
-export function withAuth(Component, requiredUserType = null) {
-  return function AuthenticatedComponent(props) {
-    const { requireAuth, isLoading } = useAuth()
-    const [checking, setChecking] = useState(true)
-
-    useEffect(() => {
-      const checkAccess = async () => {
-        if (isLoading) return
-
-        const authCheck = requireAuth(requiredUserType)
-        
-        if (!authCheck.isAllowed && authCheck.redirectTo) {
-          window.location.href = authCheck.redirectTo
-          return
-        }
-        
-        setChecking(false)
-      }
-
-      checkAccess()
-    }, [isLoading, requireAuth])
-
-    if (isLoading || checking) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1e3a5f] via-[#2a4d6e] to-[#1e3a5f]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent mx-auto mb-4"></div>
-            <p className="text-white text-lg">Loading...</p>
-          </div>
-        </div>
-      )
-    }
-
-    return <Component {...props} />
-  }
-}
-
-// HOC to redirect authenticated users away from auth pages
-export function withGuestOnly(Component) {
-  return function GuestOnlyComponent(props) {
-    const { redirectIfAuthenticated, isLoading } = useAuth()
-    const [checking, setChecking] = useState(true)
-
-    useEffect(() => {
-      if (isLoading) return
-
-      const redirectTo = redirectIfAuthenticated()
-      if (redirectTo) {
-        window.location.href = redirectTo
-        return
-      }
-      
-      setChecking(false)
-    }, [isLoading, redirectIfAuthenticated])
-
-    if (isLoading || checking) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1e3a5f] via-[#2a4d6e] to-[#1e3a5f]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent mx-auto mb-4"></div>
-            <p className="text-white text-lg">Loading...</p>
-          </div>
-        </div>
-      )
-    }
-
-    return <Component {...props} />
-  }
-}
-
-export default AuthContext

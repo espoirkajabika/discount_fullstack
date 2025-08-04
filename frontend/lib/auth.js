@@ -1,133 +1,201 @@
 // lib/auth.js
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'
 
-// Token storage keys
-const BUSINESS_TOKEN_KEY = 'businessToken'
-const BUSINESS_USER_KEY = 'businessUser'
-const SHOPPER_TOKEN_KEY = 'shopperToken'
-const SHOPPER_USER_KEY = 'shopperUser'
-
 /**
- * Generic API request handler with automatic token management
+ * Get stored authentication token
  */
-async function apiRequest(endpoint, options = {}) {
-  const url = `${API_BASE_URL}${endpoint}`
-  
-  const config = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    ...options,
-  }
-
-  // Add authorization header if token exists
-  const token = getStoredToken()
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-
-  try {
-    const response = await fetch(url, config)
-    const data = await response.json()
-
-    if (!response.ok) {
-      // Handle token expiration
-      if (response.status === 401) {
-        clearSession()
-        throw new Error('Session expired. Please sign in again.')
-      }
-      throw new Error(data.detail || `HTTP error! status: ${response.status}`)
-    }
-
-    return data
-  } catch (error) {
-    console.error('API Request failed:', error)
-    throw error
-  }
-}
-
-/**
- * Get stored token based on user type
- */
-function getStoredToken(userType = null) {
+export function getToken() {
   if (typeof window === 'undefined') return null
-  
-  // If userType is specified, get that specific token
-  if (userType === 'business') {
-    return localStorage.getItem(BUSINESS_TOKEN_KEY)
-  }
-  if (userType === 'shopper') {
-    return localStorage.getItem(SHOPPER_TOKEN_KEY)
-  }
-  
-  // Otherwise, get any available token (prioritize business)
-  return localStorage.getItem(BUSINESS_TOKEN_KEY) || localStorage.getItem(SHOPPER_TOKEN_KEY)
+  return localStorage.getItem('auth_token')
 }
 
 /**
  * Get stored user data
  */
-function getStoredUser(userType = null) {
+export function getUser() {
   if (typeof window === 'undefined') return null
-  
-  try {
-    if (userType === 'business') {
-      const userData = localStorage.getItem(BUSINESS_USER_KEY)
-      return userData ? JSON.parse(userData) : null
-    }
-    if (userType === 'shopper') {
-      const userData = localStorage.getItem(SHOPPER_USER_KEY)
-      return userData ? JSON.parse(userData) : null
-    }
-    
-    // Get any available user (prioritize business)
-    const businessUser = localStorage.getItem(BUSINESS_USER_KEY)
-    const shopperUser = localStorage.getItem(SHOPPER_USER_KEY)
-    
-    if (businessUser) return JSON.parse(businessUser)
-    if (shopperUser) return JSON.parse(shopperUser)
-    
-    return null
-  } catch (error) {
-    console.error('Error parsing stored user data:', error)
-    return null
-  }
+  const userStr = localStorage.getItem('auth_user')
+  return userStr ? JSON.parse(userStr) : null
 }
 
 /**
  * Store authentication data
  */
-function storeAuthData(user, token) {
+export function setAuthData(token, user) {
   if (typeof window === 'undefined') return
+  localStorage.setItem('auth_token', token)
+  localStorage.setItem('auth_user', JSON.stringify(user))
+}
+
+/**
+ * Clear authentication data
+ */
+export function clearAuthData() {
+  if (typeof window === 'undefined') return
+  localStorage.removeItem('auth_token')
+  localStorage.removeItem('auth_user')
+}
+
+/**
+ * Check if user is authenticated
+ */
+export function isAuthenticated() {
+  return !!getToken()
+}
+
+/**
+ * Make authenticated API request
+ */
+export async function makeAuthenticatedRequest(endpoint, options = {}) {
+  const token = getToken()
   
-  const userType = user.is_business ? 'business' : 'shopper'
+  const config = {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...options.headers,
+    },
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, config)
   
-  if (userType === 'business') {
-    localStorage.setItem(BUSINESS_TOKEN_KEY, token)
-    localStorage.setItem(BUSINESS_USER_KEY, JSON.stringify(user))
-    // Clear shopper data if exists
-    localStorage.removeItem(SHOPPER_TOKEN_KEY)
-    localStorage.removeItem(SHOPPER_USER_KEY)
-  } else {
-    localStorage.setItem(SHOPPER_TOKEN_KEY, token)
-    localStorage.setItem(SHOPPER_USER_KEY, JSON.stringify(user))
-    // Clear business data if exists
-    localStorage.removeItem(BUSINESS_TOKEN_KEY)
-    localStorage.removeItem(BUSINESS_USER_KEY)
+  // Handle 401 - token expired
+  if (response.status === 401) {
+    clearAuthData()
+    if (typeof window !== 'undefined') {
+      window.location.href = '/auth/login'
+    }
+    return null
+  }
+
+  return response
+}
+
+/**
+ * Sign up user (general)
+ */
+export async function signUp(userData) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(userData),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      if (data.detail) {
+        if (Array.isArray(data.detail)) {
+          const errorMessages = data.detail.map(err => {
+            const field = err.loc ? err.loc[err.loc.length - 1] : 'field'
+            return `${field}: ${err.msg}`
+          }).join(', ')
+          return { error: `Validation errors - ${errorMessages}` }
+        } else {
+          return { error: data.detail }
+        }
+      }
+      return { error: data.message || 'Registration failed' }
+    }
+
+    setAuthData(data.access_token, data.user)
+    return { success: true, user: data.user }
+  } catch (error) {
+    console.error('Sign up error:', error)
+    return { error: 'Network error. Please try again.' }
   }
 }
 
 /**
- * Clear all session data
+ * Register business user specifically
  */
-function clearSession() {
-  if (typeof window === 'undefined') return
-  
-  localStorage.removeItem(BUSINESS_TOKEN_KEY)
-  localStorage.removeItem(BUSINESS_USER_KEY)
-  localStorage.removeItem(SHOPPER_TOKEN_KEY)
-  localStorage.removeItem(SHOPPER_USER_KEY)
+export async function registerBusiness(businessData) {
+  try {
+    // Add is_business flag to the data
+    const userData = {
+      ...businessData,
+      is_business: true
+    }
+
+    const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(userData),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      if (data.detail) {
+        if (Array.isArray(data.detail)) {
+          const errorMessages = data.detail.map(err => {
+            const field = err.loc ? err.loc[err.loc.length - 1] : 'field'
+            return `${field}: ${err.msg}`
+          }).join(', ')
+          return { error: `Validation errors - ${errorMessages}` }
+        } else {
+          return { error: data.detail }
+        }
+      }
+      return { error: data.message || 'Registration failed' }
+    }
+
+    setAuthData(data.access_token, data.user)
+    return { success: true, user: data.user }
+  } catch (error) {
+    console.error('Business registration error:', error)
+    return { error: 'Network error. Please try again.' }
+  }
+}
+
+/**
+ * Register customer user specifically
+ */
+export async function registerCustomer(customerData) {
+  try {
+    // Add is_business flag as false
+    const userData = {
+      ...customerData,
+      is_business: false
+    }
+
+    const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(userData),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      if (data.detail) {
+        if (Array.isArray(data.detail)) {
+          const errorMessages = data.detail.map(err => {
+            const field = err.loc ? err.loc[err.loc.length - 1] : 'field'
+            return `${field}: ${err.msg}`
+          }).join(', ')
+          return { error: `Validation errors - ${errorMessages}` }
+        } else {
+          return { error: data.detail }
+        }
+      }
+      return { error: data.message || 'Registration failed' }
+    }
+
+    setAuthData(data.access_token, data.user)
+    return { success: true, user: data.user }
+  } catch (error) {
+    console.error('Customer registration error:', error)
+    return { error: 'Network error. Please try again.' }
+  }
 }
 
 /**
@@ -135,79 +203,38 @@ function clearSession() {
  */
 export async function signIn(email, password) {
   try {
-    const response = await apiRequest('/auth/login', {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ email, password }),
     })
 
-    // Store auth data
-    storeAuthData(response.user, response.access_token)
+    const data = await response.json()
 
-    return {
-      user: response.user,
-      token: response.access_token,
-      error: null,
+    if (!response.ok) {
+      // Handle different error formats more gracefully
+      let errorMessage = 'Invalid credentials'
+      
+      if (data.detail) {
+        if (typeof data.detail === 'string') {
+          errorMessage = data.detail
+        } else if (Array.isArray(data.detail)) {
+          errorMessage = data.detail.map(err => err.msg || err).join(', ')
+        }
+      } else if (data.message) {
+        errorMessage = data.message
+      }
+      
+      return { error: errorMessage }
     }
+
+    setAuthData(data.access_token, data.user)
+    return { success: true, user: data.user, token: data.access_token }
   } catch (error) {
-    return {
-      user: null,
-      token: null,
-      error: error.message,
-    }
-  }
-}
-
-/**
- * Register business user
- */
-export async function registerBusiness(userData) {
-  try {
-    const response = await apiRequest('/business/register-complete', {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    })
-
-    // Store auth data
-    storeAuthData(response.user, response.access_token)
-
-    return {
-      user: response.user,
-      token: response.access_token,
-      error: null,
-    }
-  } catch (error) {
-    return {
-      user: null,
-      token: null,
-      error: error.message,
-    }
-  }
-}
-
-/**
- * Register shopper user
- */
-export async function registerShopper(userData) {
-  try {
-    const response = await apiRequest('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    })
-
-    // Store auth data
-    storeAuthData(response.user, response.access_token)
-
-    return {
-      user: response.user,
-      token: response.access_token,
-      error: null,
-    }
-  } catch (error) {
-    return {
-      user: null,
-      token: null,
-      error: error.message,
-    }
+    console.error('Sign in error:', error)
+    return { error: 'Network error. Please try again.' }
   }
 }
 
@@ -216,214 +243,20 @@ export async function registerShopper(userData) {
  */
 export async function signOut() {
   try {
-    // Call logout endpoint
-    await apiRequest('/auth/logout', {
-      method: 'POST',
-    })
-  } catch (error) {
-    console.error('Logout API call failed:', error)
-    // Continue with local cleanup even if API call fails
-  } finally {
-    // Always clear local session
-    clearSession()
-  }
-}
-
-/**
- * Get current user
- */
-export function getCurrentUser() {
-  return getStoredUser()
-}
-
-/**
- * Get current token
- */
-export function getCurrentToken() {
-  return getStoredToken()
-}
-
-/**
- * Check if user is authenticated
- */
-export function isAuthenticated() {
-  const token = getStoredToken()
-  const user = getStoredUser()
-  return !!(token && user)
-}
-
-/**
- * Check if user is business user
- */
-export function isBusinessUser() {
-  const user = getStoredUser()
-  return user?.is_business === true
-}
-
-/**
- * Check if user is shopper
- */
-export function isShopperUser() {
-  const user = getStoredUser()
-  return user?.is_business === false
-}
-
-/**
- * Refresh token
- */
-export async function refreshToken() {
-  try {
-    const response = await apiRequest('/auth/refresh', {
-      method: 'POST',
-    })
-
-    const user = getStoredUser()
-    if (user) {
-      storeAuthData(user, response.access_token)
-    }
-
-    return {
-      token: response.access_token,
-      error: null,
-    }
-  } catch (error) {
-    clearSession()
-    return {
-      token: null,
-      error: error.message,
-    }
-  }
-}
-
-/**
- * Update user profile
- */
-export async function updateProfile(userData) {
-  try {
-    const response = await apiRequest('/auth/me', {
-      method: 'PUT',
-      body: JSON.stringify(userData),
-    })
-
-    // Update stored user data
-    const currentToken = getStoredToken()
-    if (currentToken) {
-      storeAuthData(response, currentToken)
-    }
-
-    return {
-      user: response,
-      error: null,
-    }
-  } catch (error) {
-    return {
-      user: null,
-      error: error.message,
-    }
-  }
-}
-
-/**
- * Get user profile from server
- */
-export async function getUserProfile() {
-  try {
-    const response = await apiRequest('/auth/me')
+    const token = getToken()
     
-    // Update stored user data
-    const currentToken = getStoredToken()
-    if (currentToken) {
-      storeAuthData(response, currentToken)
-    }
-
-    return {
-      user: response,
-      error: null,
-    }
-  } catch (error) {
-    return {
-      user: null,
-      error: error.message,
-    }
-  }
-}
-
-/**
- * Password reset request
- */
-export async function requestPasswordReset(email) {
-  try {
-    await apiRequest('/auth/reset-password', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    })
-
-    return {
-      success: true,
-      error: null,
+    if (token) {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
     }
   } catch (error) {
-    return {
-      success: false,
-      error: error.message,
-    }
+    console.error('Sign out error:', error)
+  } finally {
+    clearAuthData()
   }
-}
-
-/**
- * Password reset with token
- */
-export async function resetPassword(token, password) {
-  try {
-    await apiRequest('/auth/update-password', {
-      method: 'PUT',
-      body: JSON.stringify({ 
-        access_token: token, 
-        password 
-      }),
-    })
-
-    return {
-      success: true,
-      error: null,
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message,
-    }
-  }
-}
-
-/**
- * Change password for authenticated user
- */
-export async function changePassword(currentPassword, newPassword) {
-  try {
-    await apiRequest('/auth/change-password', {
-      method: 'PUT',
-      body: JSON.stringify({ 
-        current_password: currentPassword,
-        new_password: newPassword 
-      }),
-    })
-
-    return {
-      success: true,
-      error: null,
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message,
-    }
-  }
-}
-
-// Export utility functions
-export {
-  getStoredUser,
-  getStoredToken,
-  clearSession,
-  apiRequest,
 }
