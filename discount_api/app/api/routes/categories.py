@@ -26,7 +26,7 @@ async def list_categories():
 
 
 @router.get("/{category_id}", response_model=CategoryResponse)
-async def get_category(category_id: str):
+async def get_category(category_id: int): 
     """Get a specific category by ID (public endpoint)"""
     
     try:
@@ -91,7 +91,7 @@ async def create_category(
 
 @router.put("/{category_id}", response_model=CategoryResponse)
 async def update_category(
-    category_id: str,
+    category_id: int,  # ✅ Should be int, not str
     category_data: CategoryCreate,
     current_user: UserProfile = Depends(get_current_admin_user)
 ):
@@ -138,7 +138,7 @@ async def update_category(
 
 @router.delete("/{category_id}", response_model=MessageResponse)
 async def delete_category(
-    category_id: str,
+    category_id: int,  # ✅ Should be int, not str
     current_user: UserProfile = Depends(get_current_admin_user)
 ):
     """Delete a category (admin only)"""

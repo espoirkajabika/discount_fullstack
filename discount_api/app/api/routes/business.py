@@ -66,7 +66,7 @@ async def list_my_products(
     
     try:
         # Get user's business
-        business_result = supabase_admin.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
+        business_result = supabase_admin.table("businesses").select("id, business_name").eq("user_id", str(current_user.id)).execute()
         
         if not business_result.data:
             raise HTTPException(
@@ -75,9 +75,13 @@ async def list_my_products(
             )
         
         business_id = business_result.data[0]["id"]
+        business_name = business_result.data[0]["business_name"]
         
-        # Build query
-        query = supabase_admin.table("products").select("*, categories(*)", count="exact").eq("business_id", business_id)
+        # Build query with proper category join
+        query = supabase_admin.table("products").select(
+            "*, categories(*)", 
+            count="exact"
+        ).eq("business_id", business_id)
         
         # Apply search filter
         if search:
@@ -93,29 +97,60 @@ async def list_my_products(
         
         result = query.execute()
         
-        total = result.count if result.count else 0
-        total_pages = (total + limit - 1) // limit
+        if not result.data:
+            return {
+                "success": True,
+                "products": [],
+                "pagination": {
+                    "page": page,
+                    "limit": limit,
+                    "total": 0,
+                    "pages": 0
+                }
+            }
         
-        # Convert any Decimal fields to float
-        products_data = convert_decimals_to_float(result.data)
-        products = [ProductResponse(**product) for product in products_data]
+        # Process products and ensure category data is properly formatted
+        processed_products = []
+        for product in result.data:
+            product_data = convert_decimals_to_float(product)
+            
+            # Add business info to each product
+            product_data["business"] = {
+                "business_name": business_name
+            }
+            
+            # Ensure category data is properly structured
+            if product_data.get("categories"):
+                # If categories is returned as object, keep it
+                product_data["category"] = product_data["categories"]
+            elif not product_data.get("category"):
+                # If no category, set default
+                product_data["category"] = None
+                product_data["categories"] = None
+            
+            processed_products.append(product_data)
+        
+        total = result.count if result.count else 0
+        pages = (total + limit - 1) // limit
         
         return {
-            "products": products,
+            "success": True,
+            "products": processed_products,
             "pagination": {
                 "page": page,
                 "limit": limit,
                 "total": total,
-                "totalPages": total_pages
+                "pages": pages
             }
         }
         
     except HTTPException:
         raise
     except Exception as e:
+        print(f"Error listing products: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve products: {str(e)}"
+            detail=f"Failed to list products: {str(e)}"
         )
 
 
@@ -319,6 +354,15 @@ async def delete_product(
         
         business_id = business_result.data[0]["id"]
         
+        # Check if product has any active offers
+        offers_result = supabase_admin.table("offers").select("id").eq("product_id", product_id).eq("is_active", True).execute()
+        
+        if offers_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete product with active offers. Please deactivate or delete the offers first."
+            )
+        
         # Delete product
         result = supabase_admin.table("products").delete().eq("id", product_id).eq("business_id", business_id).execute()
         
@@ -335,9 +379,8 @@ async def delete_product(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Product deletion failed: {str(e)}"
+            detail=f"Delete failed: {str(e)}"
         )
-
 
 # ============================================================================
 # IMAGE UPLOAD WITH PROPER ERROR HANDLING
