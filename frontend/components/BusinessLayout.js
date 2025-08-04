@@ -56,9 +56,9 @@ function Sidebar({ activeTab, setActiveTab, onLogout, userInfo }) {
           </div>
           <div>
             <h2 className="text-sm font-semibold text-white">
-              {userInfo?.first_name || 'Business Owner'}
+              {userInfo?.business_name || `${userInfo?.first_name}'s Business` || 'Business Account'}
             </h2>
-            <p className="text-xs text-blue-200">Business Account</p>
+            <p className="text-xs text-blue-200">Business Portal</p>
           </div>
         </div>
       </div>
