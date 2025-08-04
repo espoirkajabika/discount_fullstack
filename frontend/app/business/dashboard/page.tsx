@@ -9,6 +9,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu'
+import { 
   Tag, 
   ShoppingBag,
   Users,
@@ -17,15 +23,16 @@ import {
   Loader2,
   AlertCircle,
   CreditCard,
-  Eye
+  Eye,
+  MoreHorizontal,
+  Edit,
+  Trash
 } from 'lucide-react'
 
 // Import API functions
-import { getOffers } from '@/lib/offers'
-import { getProducts } from '@/lib/products'
+import { getOffers, deleteOffer } from '@/lib/offers'
+import { getProducts, deleteProduct } from '@/lib/products'
 import { getImageUrl } from '@/lib/api'
-
-// Remove the Sidebar and TopHeader components since they're now in BusinessLayout
 
 // Stats Cards Component
 function StatsCards({ stats }) {
@@ -84,7 +91,7 @@ function StatsCards({ stats }) {
 }
 
 // Recent Offers Component
-function RecentOffers({ offers, loading, onCreateOffer, onViewAll }) {
+function RecentOffers({ offers, loading, onCreateOffer, onViewAll, onRefresh }) {
   const [activeTab, setActiveTab] = useState('Active')
   
   const tabs = ['Active', 'Expired', 'Scheduled']
@@ -101,17 +108,12 @@ function RecentOffers({ offers, loading, onCreateOffer, onViewAll }) {
     return 'Active'
   }
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
-    })
-  }
-
   const filteredOffers = offers.filter(offer => {
     const status = getOfferStatus(offer)
-    return status === activeTab
+    if (activeTab === 'Active') return status === 'Active'
+    if (activeTab === 'Expired') return status === 'Expired' || status === 'Inactive'
+    if (activeTab === 'Scheduled') return status === 'Scheduled'
+    return true
   })
 
   return (
@@ -119,7 +121,7 @@ function RecentOffers({ offers, loading, onCreateOffer, onViewAll }) {
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <div>
           <CardTitle className="text-xl font-bold text-gray-900">Offers</CardTitle>
-          <CardDescription>Manage your active promotions</CardDescription>
+          <CardDescription>Recent promotional offers</CardDescription>
         </div>
         <Button 
           onClick={onCreateOffer}
@@ -129,17 +131,17 @@ function RecentOffers({ offers, loading, onCreateOffer, onViewAll }) {
           Create offer
         </Button>
       </CardHeader>
-      
+
       <CardContent>
         {/* Tabs */}
-        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-6">
-          {tabs.map((tab) => (
+        <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg">
+          {tabs.map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex-1 ${
                 activeTab === tab
-                  ? 'bg-[#1e3a5f] text-white'
+                  ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -148,35 +150,33 @@ function RecentOffers({ offers, loading, onCreateOffer, onViewAll }) {
           ))}
         </div>
 
-        {/* Offers Grid */}
         {loading ? (
           <div className="flex justify-center items-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-[#e94e1b]" />
             <span className="ml-2 text-gray-600">Loading offers...</span>
           </div>
         ) : filteredOffers.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            {filteredOffers.slice(0, 8).map((offer) => (
-              <div key={offer.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-[#e94e1b] transition-colors h-64 flex flex-col">
-                {/* Product Image */}
-                <div className="w-full h-32 bg-gray-300 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-                  {offer.image_url || offer.product?.image_url || offer.products?.image_url ? (
-                    <img 
-                      src={offer.image_url || offer.product?.image_url || offer.products?.image_url} 
-                      alt={offer.title || offer.product_name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <ShoppingBag className="h-8 w-8 text-gray-500" />
-                  )}
-                </div>
-                
-                <div className="space-y-2 flex-1 flex flex-col">
-                  {/* Discount Badge */}
-                  <div className="flex items-center justify-between">
-                    <Badge className="bg-[#e94e1b] text-white text-xs">
-                      {offer.discount_value || offer.discount_percentage}% off
-                    </Badge>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredOffers.slice(0, 6).map((offer, index) => (
+              <div key={offer.id || index} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                <div className="flex flex-col h-full space-y-3">
+                  {/* Offer Image */}
+                  <div className="w-full h-32 bg-gray-100 rounded-lg overflow-hidden">
+                    {offer.image_url || offer.product?.image_url || offer.products?.image_url ? (
+                      <img 
+                        src={offer.image_url || offer.product?.image_url || offer.products?.image_url} 
+                        alt={offer.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Tag className="h-8 w-8 text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Status Badge */}
+                  <div className="flex justify-between items-start">
                     <Badge 
                       variant={getOfferStatus(offer) === 'Active' ? 'default' : 'secondary'}
                       className={`text-xs ${getOfferStatus(offer) === 'Active' ? 'bg-green-100 text-green-800' : ''}`}
@@ -224,8 +224,8 @@ function RecentOffers({ offers, loading, onCreateOffer, onViewAll }) {
           </div>
         )}
         
-        {filteredOffers.length > 8 && (
-          <div className="flex justify-center">
+        {filteredOffers.length > 6 && (
+          <div className="flex justify-center mt-6">
             <Button 
               variant="outline" 
               onClick={onViewAll}
@@ -242,7 +242,36 @@ function RecentOffers({ offers, loading, onCreateOffer, onViewAll }) {
 }
 
 // Products Table Component
-function ProductsTable({ products, loading, onNewProduct, onViewAll }) {
+function ProductsTable({ products, loading, onNewProduct, onViewAll, onRefresh, businessName }) {
+  const router = useRouter()
+
+  const handleViewOffers = (productId) => {
+    router.push(`/business/products/${productId}/offers`)
+  }
+
+  const handleEdit = (productId) => {
+    router.push(`/business/products/${productId}/edit`)
+  }
+
+  const handleCreateOffer = (productId) => {
+    router.push(`/business/offers/new?product_id=${productId}`)
+  }
+
+  const handleDelete = async (productId) => {
+    if (window.confirm('Are you sure you want to delete this product?')) {
+      try {
+        const result = await deleteProduct(productId)
+        if (result.success) {
+          onRefresh() // Refresh the dashboard data
+        } else {
+          alert('Failed to delete product: ' + result.error)
+        }
+      } catch (error) {
+        alert('Error deleting product')
+      }
+    }
+  }
+
   return (
     <Card className="bg-white border-0 shadow-lg">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
@@ -272,8 +301,8 @@ function ProductsTable({ products, loading, onNewProduct, onViewAll }) {
                 <tr className="border-b border-gray-200">
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Name</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Category</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">links</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Action</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Price</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -295,36 +324,51 @@ function ProductsTable({ products, loading, onNewProduct, onViewAll }) {
                         <div>
                           <div className="font-medium text-gray-900">{product.name}</div>
                           <div className="text-sm text-gray-500">
-                            {product.business_id ? 
-                              (product.business?.business_name || product.business_name || 'Your Business') : 
-                              'Your Business'
-                            }
+                            {businessName || 'Your Business'}
                           </div>
                         </div>
                       </div>
                     </td>
                     <td className="py-4 px-4">
                       <Badge variant="outline" className="text-xs">
-                        {product.category?.name || 'Uncategorized'}
+                        {product.categories?.name || product.category?.name || 'Uncategorized'}
                       </Badge>
                     </td>
                     <td className="py-4 px-4">
-                      <div className="flex space-x-2">
-                        <Button size="sm" variant="outline" className="text-xs border-blue-200 text-blue-600 hover:bg-blue-50">
-                          View offers
-                        </Button>
-                        <Button size="sm" variant="outline" className="text-xs border-gray-200 text-gray-600 hover:bg-gray-50">
-                          Edit
-                        </Button>
-                      </div>
+                      <span className="text-sm font-medium text-gray-900">
+                        {product.price ? `$${parseFloat(product.price).toFixed(2)}` : 'N/A'}
+                      </span>
                     </td>
                     <td className="py-4 px-4">
-                      <Button 
-                        size="sm" 
-                        className="bg-[#e94e1b] hover:bg-[#d13f16] text-white text-xs"
-                      >
-                        Create offer
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Open menu</span>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleViewOffers(product.id)}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View offers
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEdit(product.id)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleCreateOffer(product.id)}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Create offer
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleDelete(product.id)}
+                            className="text-red-600"
+                          >
+                            <Trash className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 ))}
@@ -374,6 +418,7 @@ export default function Dashboard() {
   
   const [offers, setOffers] = useState([])
   const [products, setProducts] = useState([])
+  const [businessName, setBusinessName] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -384,18 +429,23 @@ export default function Dashboard() {
       setError(null)
       console.log('Fetching dashboard data...')
       
-      // Fetch products
+      // Fetch products with category data
       const productsResult = await getProducts({ page: 1, limit: 100 })
       let totalProducts = 0
       
       if (productsResult.success) {
         totalProducts = productsResult.pagination?.total || 0
-        // Process product images
+        // Process product images and ensure category data is available
         const processedProducts = productsResult.products.map(product => ({
           ...product,
           image_url: getImageUrl(product.image_url)
         }))
         setProducts(processedProducts || [])
+        
+        // Get business name from first product if available
+        if (processedProducts.length > 0 && processedProducts[0].business) {
+          setBusinessName(processedProducts[0].business.business_name || '')
+        }
       }
 
       // Fetch offers
@@ -513,6 +563,7 @@ export default function Dashboard() {
               loading={false}
               onCreateOffer={handleCreateOffer}
               onViewAll={handleViewAllOffers}
+              onRefresh={handleRefresh}
             />
             
             <ProductsTable 
@@ -520,6 +571,8 @@ export default function Dashboard() {
               loading={false}
               onNewProduct={handleNewProduct}
               onViewAll={handleViewAllProducts}
+              onRefresh={handleRefresh}
+              businessName={businessName}
             />
           </div>
         </>

@@ -31,9 +31,18 @@ export async function getProducts(params = {}) {
     }
     
     const data = await response.json()
+    
+    // Ensure products have proper category structure
+    const processedProducts = (data.products || []).map(product => ({
+      ...product,
+      // Ensure both category and categories are available for backward compatibility
+      category: product.categories || product.category || null,
+      categories: product.categories || product.category || null
+    }))
+    
     return { 
       success: true, 
-      products: data.products || [],
+      products: processedProducts,
       pagination: data.pagination || {}
     }
   } catch (error) {
@@ -51,11 +60,22 @@ export async function getProduct(productId) {
     
     if (!response || !response.ok) {
       const data = await response?.json()
-      return { error: data?.detail || 'Product not found' }
+      return { error: data?.detail || 'Failed to fetch product' }
     }
     
     const data = await response.json()
-    return { success: true, product: data.product || data }
+    
+    // Process the single product with category structure
+    const processedProduct = {
+      ...data.product,
+      category: data.product?.categories || data.product?.category || null,
+      categories: data.product?.categories || data.product?.category || null
+    }
+    
+    return { 
+      success: true, 
+      product: processedProduct
+    }
   } catch (error) {
     console.error('Get product error:', error)
     return { error: 'Network error. Please try again.' }
@@ -147,16 +167,22 @@ export async function updateProduct(productId, productData) {
  */
 export async function deleteProduct(productId) {
   try {
+    console.log('Deleting product:', productId)
+    
     const response = await makeAuthenticatedRequest(`/business/products/${productId}`, {
       method: 'DELETE',
     })
     
     if (!response || !response.ok) {
       const data = await response?.json()
+      console.error('Product deletion failed:', data)
       return { error: data?.detail || 'Failed to delete product' }
     }
     
-    return { success: true }
+    const data = await response.json()
+    console.log('Product deleted successfully:', data)
+    
+    return { success: true, message: data.message || 'Product deleted successfully' }
   } catch (error) {
     console.error('Delete product error:', error)
     return { error: 'Network error. Please try again.' }

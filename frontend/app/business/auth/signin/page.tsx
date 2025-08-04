@@ -49,11 +49,17 @@ export default function BusinessLogin() {
     try {
       console.log('Starting login process...')
       
-      const result = await signIn(email, password)
+      const result = await signIn({ email, password })
       
       if (result.error) {
         console.error('Login failed:', result.error)
-        setError(result.error)
+        // Convert error object to string if needed
+        const errorMessage = typeof result.error === 'object' 
+          ? (Array.isArray(result.error) 
+              ? result.error.map(err => err.msg || err).join(', ')
+              : result.error.message || result.error.detail || JSON.stringify(result.error))
+          : result.error
+        setError(errorMessage)
         return
       }
       

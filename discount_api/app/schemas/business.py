@@ -15,15 +15,13 @@ class CategoryBase(BaseModel):
     description: Optional[str] = None
     icon: Optional[str] = None
 
-
 class CategoryCreate(CategoryBase):
     pass
-
 
 class CategoryResponse(CategoryBase):
     model_config = ConfigDict(from_attributes=True)
     
-    id: uuid.UUID
+    id: int  # Changed from UUID to int
     created_at: datetime
 
 
@@ -32,19 +30,18 @@ class CategoryResponse(CategoryBase):
 # ============================================================================
 
 class BusinessBase(BaseModel):
-    business_name: str = Field(..., min_length=2, max_length=200, description="Business name")
+    business_name: str = Field(..., min_length=2, max_length=200)
     business_description: Optional[str] = Field(None, max_length=1000)
     business_address: Optional[str] = Field(None, max_length=500)
     phone_number: Optional[str] = Field(None, min_length=10, max_length=20)
     business_website: Optional[str] = None
     avatar_url: Optional[str] = None
     business_hours: Optional[Dict[str, Any]] = None
-    category_id: Optional[uuid.UUID] = None
+    category_id: Optional[int] = None  # Changed from UUID to int
 
 
 
 class BusinessCreate(BusinessBase):
-    # NEW: Add location fields here too
     latitude: Optional[float] = Field(None, ge=-90, le=90)
     longitude: Optional[float] = Field(None, ge=-180, le=180)
     formatted_address: Optional[str] = Field(None, max_length=500)
@@ -67,7 +64,7 @@ class BusinessUpdate(BaseModel):
     business_website: Optional[str] = None
     avatar_url: Optional[str] = None
     business_hours: Optional[Dict[str, Any]] = None
-    category_id: Optional[uuid.UUID] = None
+    category_id: Optional[int] = None
 
     @field_validator('business_website')
     @classmethod
@@ -95,9 +92,10 @@ class BusinessResponse(BusinessBase):
 class ProductBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
-    price: Optional[float] = Field(None, ge=0)  # Changed from Decimal to float
+    price: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
     image_url: Optional[str] = None
-    category_id: Optional[uuid.UUID] = None
+    category_id: Optional[int] = None  # Changed from UUID to int
+    is_active: bool = True
 
 
 class ProductCreate(ProductBase):
@@ -107,9 +105,9 @@ class ProductCreate(ProductBase):
 class ProductUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
-    price: Optional[float] = Field(None, ge=0)  # Changed from Decimal to float
+    price: Optional[Decimal] = Field(None, ge=0)
     image_url: Optional[str] = None
-    category_id: Optional[uuid.UUID] = None
+    category_id: Optional[int] = None  # Changed from UUID to int
     is_active: Optional[bool] = None
 
 
@@ -118,10 +116,10 @@ class ProductResponse(ProductBase):
     
     id: uuid.UUID
     business_id: uuid.UUID
-    is_active: bool
     created_at: datetime
     updated_at: datetime
     category: Optional[CategoryResponse] = None
+    business: Optional[Dict[str, Any]] = None
     
     @field_validator('price', mode='before')
     @classmethod
@@ -260,7 +258,7 @@ class BusinessUserRegistration(BaseModel):
     business_website: Optional[str] = None
     avatar_url: Optional[str] = None
     business_hours: Optional[Dict[str, Any]] = None
-    category_id: Optional[uuid.UUID] = None
+    category_id: Optional[int] = None
     
     # Location fields - SIMPLIFIED
     latitude: Optional[float] = None
