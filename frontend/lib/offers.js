@@ -1,69 +1,6 @@
-// lib/offers.js
+// lib/offers.js - Additional API functions for offers
+
 import { makeAuthenticatedRequest } from './auth'
-
-/**
- * Get all offers for current business with pagination and filters
- */
-export async function getOffers(params = {}) {
-  try {
-    const queryParams = new URLSearchParams()
-    
-    // Add pagination
-    if (params.page) queryParams.append('page', params.page)
-    if (params.limit) queryParams.append('limit', params.limit)
-    
-    // Add search
-    if (params.search) queryParams.append('search', params.search)
-    
-    // Add status filter
-    if (params.status) queryParams.append('status', params.status)
-    
-    // Add product filter
-    if (params.product_id) queryParams.append('product_id', params.product_id)
-    
-    // Add sorting
-    if (params.sortBy) queryParams.append('sortBy', params.sortBy)
-    if (params.sortOrder) queryParams.append('sortOrder', params.sortOrder)
-    
-    const url = `/business/offers${queryParams.toString() ? '?' + queryParams.toString() : ''}`
-    const response = await makeAuthenticatedRequest(url)
-    
-    if (!response || !response.ok) {
-      const data = await response?.json()
-      return { error: data?.detail || 'Failed to fetch offers' }
-    }
-    
-    const data = await response.json()
-    return { 
-      success: true, 
-      offers: data.offers || [],
-      pagination: data.pagination || {}
-    }
-  } catch (error) {
-    console.error('Get offers error:', error)
-    return { error: 'Network error. Please try again.' }
-  }
-}
-
-/**
- * Get single offer by ID
- */
-export async function getOffer(offerId) {
-  try {
-    const response = await makeAuthenticatedRequest(`/business/offers/${offerId}`)
-    
-    if (!response || !response.ok) {
-      const data = await response?.json()
-      return { error: data?.detail || 'Offer not found' }
-    }
-    
-    const data = await response.json()
-    return { success: true, offer: data.offer || data }
-  } catch (error) {
-    console.error('Get offer error:', error)
-    return { error: 'Network error. Please try again.' }
-  }
-}
 
 /**
  * Create new offer
@@ -150,16 +87,22 @@ export async function updateOffer(offerId, offerData) {
  */
 export async function deleteOffer(offerId) {
   try {
+    console.log('Deleting offer:', offerId)
+    
     const response = await makeAuthenticatedRequest(`/business/offers/${offerId}`, {
       method: 'DELETE',
     })
     
     if (!response || !response.ok) {
       const data = await response?.json()
+      console.error('Offer deletion failed:', data)
       return { error: data?.detail || 'Failed to delete offer' }
     }
     
-    return { success: true }
+    const data = await response.json()
+    console.log('Offer deleted successfully:', data)
+    
+    return { success: true, message: data.message || 'Offer deleted successfully' }
   } catch (error) {
     console.error('Delete offer error:', error)
     return { error: 'Network error. Please try again.' }
@@ -167,79 +110,171 @@ export async function deleteOffer(offerId) {
 }
 
 /**
- * Toggle offer status (activate/deactivate)
+ * Pause offer
  */
-export async function toggleOfferStatus(offerId, isActive) {
+export async function pauseOffer(offerId) {
   try {
-    const response = await makeAuthenticatedRequest(`/business/offers/${offerId}/toggle`, {
-      method: 'PATCH',
-      body: JSON.stringify({ is_active: isActive }),
+    console.log('Pausing offer:', offerId)
+    
+    const response = await makeAuthenticatedRequest(`/business/offers/${offerId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_active: false }),
     })
     
     if (!response || !response.ok) {
       const data = await response?.json()
-      return { error: data?.detail || 'Failed to update offer status' }
+      console.error('Offer pause failed:', data)
+      return { error: data?.detail || 'Failed to pause offer' }
     }
     
     const data = await response.json()
+    console.log('Offer paused successfully:', data)
+    
     return { success: true, offer: data.offer || data }
   } catch (error) {
-    console.error('Toggle offer status error:', error)
+    console.error('Pause offer error:', error)
     return { error: 'Network error. Please try again.' }
   }
 }
 
 /**
- * Get offer analytics/stats
+ * Resume offer
  */
-export async function getOfferAnalytics(offerId, params = {}) {
+export async function resumeOffer(offerId) {
   try {
-    const queryParams = new URLSearchParams()
+    console.log('Resuming offer:', offerId)
     
-    if (params.period) queryParams.append('period', params.period)
-    if (params.start_date) queryParams.append('start_date', params.start_date)
-    if (params.end_date) queryParams.append('end_date', params.end_date)
-    
-    const url = `/business/offers/${offerId}/analytics${queryParams.toString() ? '?' + queryParams.toString() : ''}`
-    const response = await makeAuthenticatedRequest(url)
+    const response = await makeAuthenticatedRequest(`/business/offers/${offerId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_active: true }),
+    })
     
     if (!response || !response.ok) {
       const data = await response?.json()
-      return { error: data?.detail || 'Failed to fetch offer analytics' }
+      console.error('Offer resume failed:', data)
+      return { error: data?.detail || 'Failed to resume offer' }
     }
     
     const data = await response.json()
-    return { success: true, analytics: data }
+    console.log('Offer resumed successfully:', data)
+    
+    return { success: true, offer: data.offer || data }
   } catch (error) {
-    console.error('Get offer analytics error:', error)
+    console.error('Resume offer error:', error)
     return { error: 'Network error. Please try again.' }
   }
 }
 
 /**
- * Get claimed offers for business (for redemption)
+ * Get offer by ID
  */
-export async function getClaimedOffers(params = {}) {
+export async function getOffer(offerId) {
+  try {
+    const response = await makeAuthenticatedRequest(`/business/offers/${offerId}`)
+    
+    if (!response || !response.ok) {
+      const data = await response?.json()
+      return { error: data?.detail || 'Failed to fetch offer' }
+    }
+    
+    const data = await response.json()
+    
+    return { 
+      success: true, 
+      offer: data.offer || data
+    }
+  } catch (error) {
+    console.error('Get offer error:', error)
+    return { error: 'Network error. Please try again.' }
+  }
+}
+
+/**
+ * Get all offers for current business with pagination and filters
+ */
+export async function getOffers(params = {}) {
   try {
     const queryParams = new URLSearchParams()
     
+    // Add pagination
     if (params.page) queryParams.append('page', params.page)
     if (params.limit) queryParams.append('limit', params.limit)
-    if (params.redeemed_only !== undefined) queryParams.append('redeemed_only', params.redeemed_only)
-    if (params.offer_id) queryParams.append('offer_id', params.offer_id)
     
-    const url = `/business/claimed-offers${queryParams.toString() ? '?' + queryParams.toString() : ''}`
+    // Add sorting
+    if (params.sortBy) queryParams.append('sortBy', params.sortBy)
+    if (params.sortOrder) queryParams.append('sortOrder', params.sortOrder)
+    
+    // Add search
+    if (params.search) queryParams.append('search', params.search)
+    
+    // Add filters
+    if (params.product_id) queryParams.append('product_id', params.product_id)
+    if (params.status) queryParams.append('status', params.status)
+    if (params.discount_type) queryParams.append('discount_type', params.discount_type)
+    
+    const url = `/business/offers${queryParams.toString() ? '?' + queryParams.toString() : ''}`
     const response = await makeAuthenticatedRequest(url)
     
     if (!response || !response.ok) {
       const data = await response?.json()
-      return { error: data?.detail || 'Failed to fetch claimed offers' }
+      return { error: data?.detail || 'Failed to fetch offers' }
     }
     
     const data = await response.json()
-    return { success: true, data: data }
+    
+    return { 
+      success: true, 
+      offers: data.offers || [],
+      pagination: data.pagination || {}
+    }
   } catch (error) {
-    console.error('Get claimed offers error:', error)
+    console.error('Get offers error:', error)
+    return { error: 'Network error. Please try again.' }
+  }
+}
+
+/**
+ * Upload offer image
+ */
+export async function uploadOfferImage(imageFile) {
+  try {
+    console.log('Uploading offer image file:', imageFile.name, imageFile.size, 'bytes')
+    
+    const formData = new FormData()
+    formData.append('image', imageFile)
+
+    // Get the token for authorization
+    const token = localStorage.getItem('auth_token')
+    if (!token) {
+      return { error: 'Authentication required' }
+    }
+
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1'
+    const response = await fetch(`${API_BASE_URL}/business/offers/upload-image`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
+    })
+
+    if (!response.ok) {
+      const data = await response.json()
+      console.error('Offer image upload failed:', data)
+      return { error: data.detail || 'Failed to upload image' }
+    }
+
+    const data = await response.json()
+    console.log('Offer image uploaded successfully:', data)
+    
+    return { 
+      success: true, 
+      path: data.path, 
+      url: data.url,
+      compression_info: data.compression_info
+    }
+  } catch (error) {
+    console.error('Upload offer image error:', error)
     return { error: 'Network error. Please try again.' }
   }
 }
