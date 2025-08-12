@@ -39,7 +39,7 @@ import {
   Plus,
   Search,
   Filter,
-  MoreVertical,
+  MoreHorizontal,
   Eye,
   Edit,
   Trash,
@@ -385,7 +385,7 @@ export default function ProductsPage() {
                           size="sm"
                           className="h-8 w-8 p-0 bg-white/90 hover:bg-white shadow-sm"
                         >
-                          <MoreVertical className="h-4 w-4" />
+                          <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48">
