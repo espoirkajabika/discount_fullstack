@@ -123,14 +123,14 @@ export async function createProduct(productData) {
 }
 
 /**
- * Update existing product
+ * Update existing product - FIXED to use PATCH method
  */
 export async function updateProduct(productId, productData) {
   try {
     console.log('Updating product:', productId, 'with data:', productData)
     
     const response = await makeAuthenticatedRequest(`/business/products/${productId}`, {
-      method: 'PUT',
+      method: 'PATCH', // FIXED: Changed from PUT to PATCH to match backend
       body: JSON.stringify(productData),
     })
     
@@ -236,36 +236,7 @@ export async function uploadProductImage(imageFile) {
 }
 
 /**
- * Get product offers
- */
-export async function getProductOffers(productId, params = {}) {
-  try {
-    const queryParams = new URLSearchParams()
-    if (params.page) queryParams.append('page', params.page)
-    if (params.limit) queryParams.append('limit', params.limit)
-    
-    const url = `/business/products/${productId}/offers${queryParams.toString() ? '?' + queryParams.toString() : ''}`
-    const response = await makeAuthenticatedRequest(url)
-    
-    if (!response || !response.ok) {
-      const data = await response?.json()
-      return { error: data?.detail || 'Failed to fetch product offers' }
-    }
-    
-    const data = await response.json()
-    return { 
-      success: true, 
-      offers: data.offers || [],
-      pagination: data.pagination || {}
-    }
-  } catch (error) {
-    console.error('Get product offers error:', error)
-    return { error: 'Network error. Please try again.' }
-  }
-}
-
-/**
- * Get product categories
+ * Get categories for select options
  */
 export async function getCategories() {
   try {
@@ -276,36 +247,14 @@ export async function getCategories() {
       return { error: data?.detail || 'Failed to fetch categories' }
     }
     
-    const data = await response.json()
+    const categories = await response.json()
+    
     return { 
       success: true, 
-      categories: data.categories || data || []
+      categories: Array.isArray(categories) ? categories : []
     }
   } catch (error) {
     console.error('Get categories error:', error)
-    return { error: 'Network error. Please try again.' }
-  }
-}
-
-/**
- * Create new category
- */
-export async function createCategory(categoryData) {
-  try {
-    const response = await makeAuthenticatedRequest('/categories', {
-      method: 'POST',
-      body: JSON.stringify(categoryData),
-    })
-    
-    if (!response || !response.ok) {
-      const data = await response?.json()
-      return { error: data?.detail || 'Failed to create category' }
-    }
-    
-    const data = await response.json()
-    return { success: true, category: data.category || data }
-  } catch (error) {
-    console.error('Create category error:', error)
     return { error: 'Network error. Please try again.' }
   }
 }

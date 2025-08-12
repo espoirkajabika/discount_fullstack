@@ -4,42 +4,60 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import BusinessLayout from '@/components/BusinessLayout'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger 
-} from '@/components/ui/dropdown-menu'
-import { 
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   ShoppingBag,
   Plus,
-  Loader2,
-  AlertCircle,
   Search,
   Filter,
-  MoreHorizontal,
+  MoreVertical,
+  Eye,
   Edit,
   Trash,
-  Eye,
-  TrendingUp,
-  Package
+  Tag,
+  Package,
+  AlertCircle,
+  Loader2,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  X
 } from 'lucide-react'
 
-// Import API functions
-import { getProducts, deleteProduct, getCategories } from '@/lib/products'
+// Import API functions and utils
+import { getProducts, getCategories, deleteProduct } from '@/lib/products'
 import { getImageUrl } from '@/lib/api'
+
+const ITEMS_PER_PAGE = 12
 
 export default function ProductsPage() {
   const { user } = useAuth()
@@ -47,29 +65,31 @@ export default function ProductsPage() {
   
   const [products, setProducts] = useState([])
   const [categories, setCategories] = useState([])
+  const [pagination, setPagination] = useState({})
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
-  const [businessName, setBusinessName] = useState('')
-  
-  // Filter and search state
+  const [error, setError] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
-  const [sortBy, setSortBy] = useState('created_at')
-  const [sortOrder, setSortOrder] = useState('desc')
-  
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [pagination, setPagination] = useState({})
-  const ITEMS_PER_PAGE = 12
+  const [sortBy, setSortBy] = useState('created_at')
+  const [sortOrder, setSortOrder] = useState('desc')
+  const [businessName, setBusinessName] = useState('')
+  
+  // Delete dialog state
+  const [deleteDialog, setDeleteDialog] = useState({
+    isOpen: false,
+    productId: null,
+    productName: '',
+    isDeleting: false
+  })
 
-  // Fetch products data
+  // Fetch products
   const fetchProducts = async () => {
+    if (!user || !user.is_business) return
+    
     try {
-      setError(null)
-      console.log('Fetching products...')
-      
       const params = {
         page: currentPage,
         limit: ITEMS_PER_PAGE,
@@ -164,23 +184,62 @@ export default function ProductsPage() {
     router.push(`/business/offers/new?product_id=${productId}`)
   }
 
-  const handleDelete = async (productId) => {
-    if (window.confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
-      try {
-        const result = await deleteProduct(productId)
-        if (result.success) {
-          await fetchProducts() // Refresh the products list
-        } else {
-          alert('Failed to delete product: ' + result.error)
-        }
-      } catch (error) {
-        alert('Error deleting product')
+  // Open delete confirmation dialog
+  const openDeleteDialog = (product) => {
+    setDeleteDialog({
+      isOpen: true,
+      productId: product.id,
+      productName: product.name,
+      isDeleting: false
+    })
+  }
+
+  // Close delete dialog
+  const closeDeleteDialog = () => {
+    if (!deleteDialog.isDeleting) {
+      setDeleteDialog({
+        isOpen: false,
+        productId: null,
+        productName: '',
+        isDeleting: false
+      })
+    }
+  }
+
+  // Handle actual delete
+  const handleConfirmDelete = async () => {
+    if (!deleteDialog.productId) return
+
+    try {
+      setDeleteDialog(prev => ({ ...prev, isDeleting: true }))
+      
+      const result = await deleteProduct(deleteDialog.productId)
+      
+      if (result.success) {
+        // Refresh the products list
+        await fetchProducts()
+        closeDeleteDialog()
+        
+        // Show success message briefly
+        setError(null)
+      } else {
+        setError('Failed to delete product: ' + result.error)
+        closeDeleteDialog()
       }
+    } catch (error) {
+      console.error('Error deleting product:', error)
+      setError('Error deleting product')
+      closeDeleteDialog()
     }
   }
 
   const handleNewProduct = () => {
     router.push('/business/products/new')
+  }
+
+  const getSortIcon = (field) => {
+    if (sortBy !== field) return <ArrowUpDown className="h-4 w-4" />
+    return sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
   }
 
   if (!user || !user.is_business) {
@@ -213,20 +272,20 @@ export default function ProductsPage() {
               placeholder="Search products..."
               value={searchTerm}
               onChange={(e) => handleSearch(e.target.value)}
-              className="pl-10"
+              className="pl-10 bg-white border-gray-200"
             />
           </div>
 
           {/* Filters and Actions */}
-          <div className="flex gap-3 w-full lg:w-auto">
+          <div className="flex gap-2">
             {/* Category Filter */}
-            <Select value={selectedCategory || 'all'} onValueChange={handleCategoryFilter}>
-              <SelectTrigger className="w-full lg:w-[180px]">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="All Categories" />
+            <Select value={selectedCategory} onValueChange={handleCategoryFilter}>
+              <SelectTrigger className="w-[180px] bg-white border-gray-200">
+                <Filter className="h-4 w-4 mr-2 text-gray-400" />
+                <SelectValue placeholder="All categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="all">All categories</SelectItem>
                 {categories.map((category) => (
                   <SelectItem key={category.id} value={category.id}>
                     {category.name}
@@ -235,29 +294,8 @@ export default function ProductsPage() {
               </SelectContent>
             </Select>
 
-            {/* Sort */}
-            <Select value={`${sortBy}-${sortOrder}`} onValueChange={(value) => {
-              const [field, order] = value.split('-')
-              setSortBy(field)
-              setSortOrder(order)
-              setCurrentPage(1)
-            }}>
-              <SelectTrigger className="w-full lg:w-[140px]">
-                <TrendingUp className="h-4 w-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="created_at-desc">Newest First</SelectItem>
-                <SelectItem value="created_at-asc">Oldest First</SelectItem>
-                <SelectItem value="name-asc">Name A-Z</SelectItem>
-                <SelectItem value="name-desc">Name Z-A</SelectItem>
-                <SelectItem value="price-desc">Price High-Low</SelectItem>
-                <SelectItem value="price-asc">Price Low-High</SelectItem>
-              </SelectContent>
-            </Select>
-
             {/* New Product Button */}
-            <Button 
+            <Button
               onClick={handleNewProduct}
               className="bg-[#e94e1b] hover:bg-[#d13f16] text-white"
             >
@@ -266,157 +304,265 @@ export default function ProductsPage() {
             </Button>
           </div>
         </div>
+
+        {/* Sort Controls */}
+        <div className="flex gap-2 mt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleSort('name')}
+            className="text-sm"
+          >
+            Name {getSortIcon('name')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleSort('price')}
+            className="text-sm"
+          >
+            Price {getSortIcon('price')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleSort('created_at')}
+            className="text-sm"
+          >
+            Date {getSortIcon('created_at')}
+          </Button>
+        </div>
       </div>
 
       {/* Products Grid */}
       {loading ? (
-        <div className="flex justify-center items-center py-20">
+        <div className="flex justify-center items-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-[#e94e1b]" />
-          <span className="ml-2 text-gray-600">Loading products...</span>
+          <span className="ml-3 text-gray-600">Loading products...</span>
         </div>
-      ) : products.length > 0 ? (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-            {products.map((product) => (
-              <Card key={product.id} className="bg-white border-0 shadow-lg hover:shadow-xl transition-shadow">
-                <CardContent className="p-0">
-                  {/* Product Image */}
-                  <div className="relative h-48 bg-gray-200 rounded-t-lg overflow-hidden">
-                    {product.image_url ? (
-                      <img 
-                        src={product.image_url} 
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <Package className="h-12 w-12 text-gray-400" />
-                      </div>
-                    )}
-                    
-                    {/* Actions Dropdown */}
-                    <div className="absolute top-2 right-2">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="secondary" size="sm" className="h-8 w-8 p-0 bg-white/90 hover:bg-white">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleViewOffers(product.id)}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Offers
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleCreateOffer(product.id)}>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Create Offer
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEdit(product.id)}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit Product
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleDelete(product.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-
-                  {/* Product Info */}
-                  <div className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-semibold text-gray-900 line-clamp-2">{product.name}</h3>
-                    </div>
-                    
-                    <div className="flex items-center justify-between mb-3">
-                      <Badge variant="outline" className="text-xs">
-                        {product.categories?.name || product.category?.name || 'Uncategorized'}
-                      </Badge>
-                      {product.price && (
-                        <span className="text-lg font-bold text-[#e94e1b]">
-                          ${parseFloat(product.price).toFixed(2)}
-                        </span>
-                      )}
-                    </div>
-
-                    {product.description && (
-                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                        {product.description}
-                      </p>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => handleViewOffers(product.id)}
-                        className="flex-1 text-xs border-[#e94e1b] text-[#e94e1b] hover:bg-[#e94e1b] hover:text-white"
-                      >
-                        View Offers
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        onClick={() => handleCreateOffer(product.id)}
-                        className="flex-1 text-xs bg-[#e94e1b] hover:bg-[#d13f16] text-white"
-                      >
-                        Create Offer
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </Button>
-              
-              <span className="text-sm text-gray-600 px-4">
-                Page {currentPage} of {totalPages}
-              </span>
-              
-              <Button
-                variant="outline"
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </Button>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="text-center py-20">
-          <ShoppingBag className="h-16 w-16 text-gray-400 mx-auto mb-6" />
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            {searchTerm || selectedCategory ? 'No products found' : 'No products yet'}
-          </h3>
-          <p className="text-gray-500 mb-6">
-            {searchTerm || selectedCategory 
-              ? 'Try adjusting your search or filters' 
-              : 'Add your first product to start creating offers and managing your inventory!'
-            }
+      ) : products.length === 0 ? (
+        <div className="text-center py-12">
+          <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">No products found</h3>
+          <p className="text-gray-600 mb-6">
+            {searchTerm || selectedCategory
+              ? 'No products match your current filters.'
+              : 'Get started by adding your first product to the catalog.'}
           </p>
-          <Button onClick={handleNewProduct} className="bg-[#e94e1b] hover:bg-[#d13f16] text-white">
+          <Button
+            onClick={handleNewProduct}
+            className="bg-[#e94e1b] hover:bg-[#d13f16] text-white"
+          >
             <Plus className="h-4 w-4 mr-2" />
-            Add your first product
+            Add Your First Product
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {products.map((product) => (
+            <Card key={product.id} className="bg-white border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+              <CardContent className="p-0">
+                {/* Product Image */}
+                <div className="relative aspect-square bg-gray-100 rounded-t-lg overflow-hidden">
+                  {product.image_url ? (
+                    <img
+                      src={product.image_url}
+                      alt={product.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <ShoppingBag className="h-12 w-12 text-gray-300" />
+                    </div>
+                  )}
+                  
+                  {/* Actions Dropdown */}
+                  <div className="absolute top-2 right-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="h-8 w-8 p-0 bg-white/90 hover:bg-white shadow-sm"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem
+                          onClick={() => handleViewOffers(product.id)}
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Offers
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleCreateOffer(product.id)}
+                          className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                        >
+                          <Tag className="h-4 w-4 mr-2" />
+                          Create Offer
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => handleEdit(product.id)}
+                          className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => openDeleteDialog(product)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  {/* Stock Status */}
+                  {product.stock_quantity !== null && product.stock_quantity !== undefined && (
+                    <div className="absolute bottom-2 left-2">
+                      <Badge
+                        variant={product.stock_quantity > 0 ? "default" : "destructive"}
+                        className="text-xs"
+                      >
+                        {product.stock_quantity > 0 ? `${product.stock_quantity} in stock` : 'Out of stock'}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+
+                {/* Product Info */}
+                <div className="p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-semibold text-gray-900 line-clamp-2">{product.name}</h3>
+                  </div>
+                  
+                  <div className="flex items-center justify-between mb-3">
+                    <Badge variant="outline" className="text-xs">
+                      {product.categories?.name || product.category?.name || 'Uncategorized'}
+                    </Badge>
+                    {product.price && (
+                      <span className="text-lg font-bold text-[#e94e1b]">
+                        ${parseFloat(product.price).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+
+                  {product.description && (
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                      {product.description}
+                    </p>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleViewOffers(product.id)}
+                      className="flex-1 text-xs"
+                    >
+                      <Eye className="h-3 w-3 mr-1" />
+                      View Offers
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      onClick={() => handleCreateOffer(product.id)}
+                      className="flex-1 bg-[#e94e1b] hover:bg-[#d13f16] text-white text-xs"
+                    >
+                      <Tag className="h-3 w-3 mr-1" />
+                      Create Offer
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-4 mt-8">
+          <Button
+            variant="outline"
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </Button>
+          
+          <div className="flex items-center gap-2">
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              const pageNum = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i
+              return pageNum <= totalPages ? (
+                <Button
+                  key={pageNum}
+                  variant={pageNum === currentPage ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={pageNum === currentPage ? "bg-[#e94e1b] hover:bg-[#d13f16]" : ""}
+                >
+                  {pageNum}
+                </Button>
+              ) : null
+            })}
+          </div>
+          
+          <Button
+            variant="outline"
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Next
           </Button>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialog.isOpen} onOpenChange={closeDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash className="h-5 w-5 text-red-600" />
+              Delete Product
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>"{deleteDialog.productName}"</strong>? 
+              This action cannot be undone and will permanently remove the product and all associated offers.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={closeDeleteDialog}
+              disabled={deleteDialog.isDeleting}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleteDialog.isDeleting}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deleteDialog.isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash className="h-4 w-4 mr-2" />
+                  Delete Product
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </BusinessLayout>
   )
 }

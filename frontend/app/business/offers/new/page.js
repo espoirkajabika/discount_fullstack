@@ -128,8 +128,8 @@ export default function CreateOfferPage() {
       }
     }
 
-    const startDate = new Date(formData.start_date)
-    const expiryDate = new Date(formData.expiry_date)
+    const startDate = new Date(formData.start_date + 'T00:00:00')
+    const expiryDate = new Date(formData.expiry_date + 'T00:00:00')
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
@@ -294,7 +294,7 @@ export default function CreateOfferPage() {
           className="mb-4 hover:bg-gray-50"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Offers
+          Back
         </Button>
 
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
