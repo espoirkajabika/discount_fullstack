@@ -17,19 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   Tag,
   ArrowLeft,
   Save,
   Loader2,
   AlertCircle,
-  Percent,
-  DollarSign,
-  ShoppingCart,
-  Gift,
-  Calendar,
-  Info
+  Package
 } from 'lucide-react'
 
 // Import API functions
@@ -251,6 +245,7 @@ export default function CreateOfferPage() {
         offerData.buy_quantity = parseInt(formData.buy_quantity)
         offerData.get_quantity = parseInt(formData.get_quantity)
         offerData.get_discount_percentage = parseFloat(formData.get_discount_percentage)
+        offerData.discount_value = 0 // BOGO offers don't use discount_value, but DB requires it
       }
 
       console.log('Creating offer with data:', offerData)
@@ -322,7 +317,7 @@ export default function CreateOfferPage() {
       subtitle="Create a promotional offer for your products"
       activeTab="offers"
     >
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         {/* Back Button */}
         <Button 
           variant="outline" 
@@ -333,386 +328,358 @@ export default function CreateOfferPage() {
           Back to Offers
         </Button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Form */}
           <div className="lg:col-span-2">
-            <Card className="bg-white border-0 shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Tag className="h-5 w-5 text-[#e94e1b]" />
+            <Card className="bg-[#1e3a5f] border-2 border-[#00a8e6] shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <Tag className="h-5 w-5 text-[#00a8e6]" />
                   Offer Details
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-blue-200">
                   Configure your promotional offer
                 </CardDescription>
               </CardHeader>
 
-              <CardContent>
+              <CardContent className="space-y-6">
                 {error && (
-                  <Alert className="mb-6 border-red-200 bg-red-50">
-                    <AlertCircle className="h-4 w-4 text-red-600" />
-                    <AlertDescription className="text-red-800">{error}</AlertDescription>
+                  <Alert className="mb-6 border-red-400 bg-red-900/20">
+                    <AlertCircle className="h-4 w-4 text-red-400" />
+                    <AlertDescription className="text-red-300">{error}</AlertDescription>
                   </Alert>
                 )}
 
                 {success && (
-                  <Alert className="mb-6 border-green-200 bg-green-50">
-                    <AlertCircle className="h-4 w-4 text-green-600" />
-                    <AlertDescription className="text-green-800">
+                  <Alert className="mb-6 border-green-400 bg-green-900/20">
+                    <AlertCircle className="h-4 w-4 text-green-400" />
+                    <AlertDescription className="text-green-300">
                       Offer created successfully! Redirecting to offers page...
                     </AlertDescription>
                   </Alert>
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Basic Information */}
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="product_id" className="text-sm font-medium text-gray-700">
-                        Product *
-                      </Label>
-                      <Select 
-                        value={formData.product_id} 
-                        onValueChange={(value) => handleSelectChange('product_id', value)}
-                      >
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Select a product for this offer" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {products.map((product) => (
-                            <SelectItem key={product.id} value={product.id}>
-                              {product.name} {product.price && `- $${parseFloat(product.price).toFixed(2)}`}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="title" className="text-sm font-medium text-gray-700">
-                        Offer Title (Optional)
-                      </Label>
-                      <Input
-                        id="title"
-                        name="title"
-                        value={formData.title}
-                        onChange={handleInputChange}
-                        placeholder="Leave blank to auto-generate"
-                        className="mt-1"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        If left blank, we'll create a title based on your discount type
-                      </p>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="description" className="text-sm font-medium text-gray-700">
-                        Description
-                      </Label>
-                      <Textarea
-                        id="description"
-                        name="description"
-                        value={formData.description}
-                        onChange={handleInputChange}
-                        placeholder="Describe your offer..."
-                        rows={3}
-                        className="mt-1 resize-none"
-                      />
-                    </div>
+                  {/* Product Selection */}
+                  <div className="space-y-2">
+                    <Label className="text-white font-medium">Product *</Label>
+                    <Select 
+                      value={formData.product_id} 
+                      onValueChange={(value) => handleSelectChange('product_id', value)}
+                    >
+                      <SelectTrigger className="bg-[#1e3a5f] border-white/20 text-white">
+                        <SelectValue placeholder="Select a product for this offer" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border-gray-200">
+                        {products.map((product) => (
+                          <SelectItem key={product.id} value={product.id} className="text-gray-900 hover:bg-gray-100">
+                            {product.name} {product.price && `- $${parseFloat(product.price).toFixed(2)}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  {/* Discount Configuration */}
+                  {/* Offer Title */}
+                  <div className="space-y-2">
+                    <Label className="text-white font-medium">Offer Title (Optional)</Label>
+                    <Input
+                      name="title"
+                      value={formData.title}
+                      onChange={handleInputChange}
+                      placeholder="Leave blank to auto-generate"
+                      className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400"
+                    />
+                    <p className="text-xs text-blue-300">
+                      If left blank, we'll create a title based on your discount type
+                    </p>
+                  </div>
+
+                  {/* Description */}
+                  <div className="space-y-2">
+                    <Label className="text-white font-medium">Description</Label>
+                    <Textarea
+                      name="description"
+                      value={formData.description}
+                      onChange={handleInputChange}
+                      placeholder="Describe your offer..."
+                      rows={3}
+                      className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 resize-none"
+                    />
+                  </div>
+
+                  {/* Discount Type */}
                   <div className="space-y-4">
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700 mb-3 block">
-                        Discount Type *
-                      </Label>
-                      <Tabs value={formData.discount_type} onValueChange={handleDiscountTypeChange}>
-                        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-3">
-                          <TabsTrigger value="percentage" className="flex items-center gap-2">
-                            <Percent className="h-4 w-4" />
-                            Percentage
-                          </TabsTrigger>
-                          <TabsTrigger value="fixed" className="flex items-center gap-2">
-                            <DollarSign className="h-4 w-4" />
-                            Fixed Amount
-                          </TabsTrigger>
-                          <TabsTrigger value="minimum_purchase" className="flex items-center gap-2">
-                            <ShoppingCart className="h-4 w-4" />
-                            Min Purchase
-                          </TabsTrigger>
-                          <TabsTrigger value="quantity_discount" className="flex items-center gap-2">
-                            <Tag className="h-4 w-4" />
-                            Bulk Discount
-                          </TabsTrigger>
-                          <TabsTrigger value="bogo" className="flex items-center gap-2">
-                            <Gift className="h-4 w-4" />
-                            BOGO
-                          </TabsTrigger>
-                        </TabsList>
-
-                        {/* Percentage Discount */}
-                        <TabsContent value="percentage" className="space-y-4 mt-4">
-                          <div>
-                            <Label htmlFor="discount_value" className="text-sm font-medium text-gray-700">
-                              Discount Percentage *
-                            </Label>
-                            <div className="relative">
-                              <Input
-                                id="discount_value"
-                                name="discount_value"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                max="100"
-                                value={formData.discount_value}
-                                onChange={handleInputChange}
-                                placeholder="20"
-                                className="pr-8 mt-1"
-                              />
-                              <Percent className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                            </div>
-                          </div>
-                        </TabsContent>
-
-                        {/* Fixed Amount Discount */}
-                        <TabsContent value="fixed" className="space-y-4 mt-4">
-                          <div>
-                            <Label htmlFor="discount_value" className="text-sm font-medium text-gray-700">
-                              Discount Amount *
-                            </Label>
-                            <div className="relative">
-                              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                              <Input
-                                id="discount_value"
-                                name="discount_value"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={formData.discount_value}
-                                onChange={handleInputChange}
-                                placeholder="10.00"
-                                className="pl-10 mt-1"
-                              />
-                            </div>
-                          </div>
-                        </TabsContent>
-
-                        {/* Minimum Purchase Discount */}
-                        <TabsContent value="minimum_purchase" className="space-y-4 mt-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label htmlFor="discount_value" className="text-sm font-medium text-gray-700">
-                                Discount Amount *
-                              </Label>
-                              <div className="relative">
-                                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                                <Input
-                                  id="discount_value"
-                                  name="discount_value"
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  value={formData.discount_value}
-                                  onChange={handleInputChange}
-                                  placeholder="5.00"
-                                  className="pl-10 mt-1"
-                                />
-                              </div>
-                            </div>
-                            <div>
-                              <Label htmlFor="minimum_purchase_amount" className="text-sm font-medium text-gray-700">
-                                Minimum Purchase *
-                              </Label>
-                              <div className="relative">
-                                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                                <Input
-                                  id="minimum_purchase_amount"
-                                  name="minimum_purchase_amount"
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  value={formData.minimum_purchase_amount}
-                                  onChange={handleInputChange}
-                                  placeholder="50.00"
-                                  className="pl-10 mt-1"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </TabsContent>
-
-                        {/* Quantity Discount */}
-                        <TabsContent value="quantity_discount" className="space-y-4 mt-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label htmlFor="minimum_quantity" className="text-sm font-medium text-gray-700">
-                                Minimum Quantity *
-                              </Label>
-                              <Input
-                                id="minimum_quantity"
-                                name="minimum_quantity"
-                                type="number"
-                                min="1"
-                                value={formData.minimum_quantity}
-                                onChange={handleInputChange}
-                                placeholder="3"
-                                className="mt-1"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="discount_value" className="text-sm font-medium text-gray-700">
-                                Discount Percentage *
-                              </Label>
-                              <div className="relative">
-                                <Input
-                                  id="discount_value"
-                                  name="discount_value"
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  max="100"
-                                  value={formData.discount_value}
-                                  onChange={handleInputChange}
-                                  placeholder="15"
-                                  className="pr-8 mt-1"
-                                />
-                                <Percent className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                              </div>
-                            </div>
-                          </div>
-                        </TabsContent>
-
-                        {/* BOGO Discount */}
-                        <TabsContent value="bogo" className="space-y-4 mt-4">
-                          <div className="grid grid-cols-3 gap-4">
-                            <div>
-                              <Label htmlFor="buy_quantity" className="text-sm font-medium text-gray-700">
-                                Buy Quantity *
-                              </Label>
-                              <Input
-                                id="buy_quantity"
-                                name="buy_quantity"
-                                type="number"
-                                min="1"
-                                value={formData.buy_quantity}
-                                onChange={handleInputChange}
-                                placeholder="2"
-                                className="mt-1"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="get_quantity" className="text-sm font-medium text-gray-700">
-                                Get Quantity *
-                              </Label>
-                              <Input
-                                id="get_quantity"
-                                name="get_quantity"
-                                type="number"
-                                min="1"
-                                value={formData.get_quantity}
-                                onChange={handleInputChange}
-                                placeholder="1"
-                                className="mt-1"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="get_discount_percentage" className="text-sm font-medium text-gray-700">
-                                Get Discount % *
-                              </Label>
-                              <div className="relative">
-                                <Input
-                                  id="get_discount_percentage"
-                                  name="get_discount_percentage"
-                                  type="number"
-                                  step="0.01"
-                                  min="1"
-                                  max="100"
-                                  value={formData.get_discount_percentage}
-                                  onChange={handleInputChange}
-                                  placeholder="100"
-                                  className="pr-8 mt-1"
-                                />
-                                <Percent className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                              </div>
-                            </div>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            100% = Free, 50% = Half price, etc.
-                          </p>
-                        </TabsContent>
-                      </Tabs>
+                    <Label className="text-white font-medium">Discount Type *</Label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        onClick={() => handleDiscountTypeChange('percentage')}
+                        className={`px-4 py-2 rounded text-sm ${
+                          formData.discount_type === 'percentage' 
+                            ? 'bg-[#00a8e6] text-white' 
+                            : 'bg-transparent border border-white/20 text-white hover:bg-white/10'
+                        }`}
+                      >
+                        Percentage
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => handleDiscountTypeChange('fixed')}
+                        className={`px-4 py-2 rounded text-sm ${
+                          formData.discount_type === 'fixed' 
+                            ? 'bg-[#00a8e6] text-white' 
+                            : 'bg-transparent border border-white/20 text-white hover:bg-white/10'
+                        }`}
+                      >
+                        Fixed Amount
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => handleDiscountTypeChange('minimum_purchase')}
+                        className={`px-4 py-2 rounded text-sm ${
+                          formData.discount_type === 'minimum_purchase' 
+                            ? 'bg-[#00a8e6] text-white' 
+                            : 'bg-transparent border border-white/20 text-white hover:bg-white/10'
+                        }`}
+                      >
+                        Min Purchase
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => handleDiscountTypeChange('quantity_discount')}
+                        className={`px-4 py-2 rounded text-sm ${
+                          formData.discount_type === 'quantity_discount' 
+                            ? 'bg-[#00a8e6] text-white' 
+                            : 'bg-transparent border border-white/20 text-white hover:bg-white/10'
+                        }`}
+                      >
+                        Bulk Discount
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => handleDiscountTypeChange('bogo')}
+                        className={`px-4 py-2 rounded text-sm ${
+                          formData.discount_type === 'bogo' 
+                            ? 'bg-[#00a8e6] text-white' 
+                            : 'bg-transparent border border-white/20 text-white hover:bg-white/10'
+                        }`}
+                      >
+                        BOGO
+                      </Button>
                     </div>
+
+                    {/* Percentage Discount */}
+                    {formData.discount_type === 'percentage' && (
+                      <div className="space-y-2">
+                        <Label className="text-white font-medium">Discount Percentage *</Label>
+                        <div className="relative">
+                          <Input
+                            name="discount_value"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={formData.discount_value}
+                            onChange={handleInputChange}
+                            placeholder="20"
+                            className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 pr-8"
+                          />
+                          <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">%</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Fixed Amount Discount */}
+                    {formData.discount_type === 'fixed' && (
+                      <div className="space-y-2">
+                        <Label className="text-white font-medium">Discount Amount *</Label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
+                          <Input
+                            name="discount_value"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={formData.discount_value}
+                            onChange={handleInputChange}
+                            placeholder="10.00"
+                            className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 pl-8"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Minimum Purchase Discount */}
+                    {formData.discount_type === 'minimum_purchase' && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-white font-medium">Discount Amount *</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
+                            <Input
+                              name="discount_value"
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={formData.discount_value}
+                              onChange={handleInputChange}
+                              placeholder="5.00"
+                              className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 pl-8"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-white font-medium">Minimum Purchase *</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
+                            <Input
+                              name="minimum_purchase_amount"
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={formData.minimum_purchase_amount}
+                              onChange={handleInputChange}
+                              placeholder="50.00"
+                              className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 pl-8"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Quantity Discount */}
+                    {formData.discount_type === 'quantity_discount' && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-white font-medium">Minimum Quantity *</Label>
+                          <Input
+                            name="minimum_quantity"
+                            type="number"
+                            min="1"
+                            value={formData.minimum_quantity}
+                            onChange={handleInputChange}
+                            placeholder="3"
+                            className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-white font-medium">Discount Percentage *</Label>
+                          <div className="relative">
+                            <Input
+                              name="discount_value"
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              value={formData.discount_value}
+                              onChange={handleInputChange}
+                              placeholder="15"
+                              className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 pr-8"
+                            />
+                            <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">%</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* BOGO Discount */}
+                    {formData.discount_type === 'bogo' && (
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-white font-medium">Buy Quantity *</Label>
+                          <Input
+                            name="buy_quantity"
+                            type="number"
+                            min="1"
+                            value={formData.buy_quantity}
+                            onChange={handleInputChange}
+                            placeholder="2"
+                            className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-white font-medium">Get Quantity *</Label>
+                          <Input
+                            name="get_quantity"
+                            type="number"
+                            min="1"
+                            value={formData.get_quantity}
+                            onChange={handleInputChange}
+                            placeholder="1"
+                            className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-white font-medium">Get Discount % *</Label>
+                          <div className="relative">
+                            <Input
+                              name="get_discount_percentage"
+                              type="number"
+                              step="0.01"
+                              min="1"
+                              max="100"
+                              value={formData.get_discount_percentage}
+                              onChange={handleInputChange}
+                              placeholder="100"
+                              className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 pr-8"
+                            />
+                            <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">%</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Dates and Limits */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="start_date" className="text-sm font-medium text-gray-700">
-                        Start Date *
-                      </Label>
-                      <div className="relative">
-                        <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                        <Input
-                          id="start_date"
-                          name="start_date"
-                          type="date"
-                          value={formData.start_date}
-                          onChange={handleInputChange}
-                          className="pl-10 mt-1"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="expiry_date" className="text-sm font-medium text-gray-700">
-                        End Date *
-                      </Label>
-                      <div className="relative">
-                        <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                        <Input
-                          id="expiry_date"
-                          name="expiry_date"
-                          type="date"
-                          value={formData.expiry_date}
-                          onChange={handleInputChange}
-                          className="pl-10 mt-1"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="max_claims" className="text-sm font-medium text-gray-700">
-                        Maximum Claims (Optional)
-                      </Label>
+                    <div className="space-y-2">
+                      <Label className="text-white font-medium">Start Date *</Label>
                       <Input
-                        id="max_claims"
+                        name="start_date"
+                        type="date"
+                        value={formData.start_date}
+                        onChange={handleInputChange}
+                        className="bg-[#1e3a5f] border-white/20 text-white"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-white font-medium">End Date *</Label>
+                      <Input
+                        name="expiry_date"
+                        type="date"
+                        value={formData.expiry_date}
+                        onChange={handleInputChange}
+                        className="bg-[#1e3a5f] border-white/20 text-white"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-white font-medium">Maximum Claims (Optional)</Label>
+                      <Input
                         name="max_claims"
                         type="number"
                         min="1"
                         value={formData.max_claims}
                         onChange={handleInputChange}
                         placeholder="Unlimited"
-                        className="mt-1"
+                        className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400"
                       />
                     </div>
                   </div>
 
                   {/* Terms and Conditions */}
-                  <div>
-                    <Label htmlFor="terms_conditions" className="text-sm font-medium text-gray-700">
-                      Terms & Conditions (Optional)
-                    </Label>
+                  <div className="space-y-2">
+                    <Label className="text-white font-medium">Terms & Conditions (Optional)</Label>
                     <Textarea
-                      id="terms_conditions"
                       name="terms_conditions"
                       value={formData.terms_conditions}
                       onChange={handleInputChange}
                       placeholder="Enter any terms and conditions for this offer..."
                       rows={3}
-                      className="mt-1 resize-none"
+                      className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 resize-none"
                     />
                   </div>
 
@@ -722,7 +689,7 @@ export default function CreateOfferPage() {
                       type="button"
                       variant="outline"
                       onClick={() => router.back()}
-                      className="flex-1"
+                      className="flex-1 border-white/20 text-white hover:bg-white/10"
                       disabled={loading}
                     >
                       Cancel
@@ -752,10 +719,10 @@ export default function CreateOfferPage() {
 
           {/* Preview Sidebar */}
           <div className="lg:col-span-1">
-            <Card className="bg-white border-0 shadow-lg sticky top-6">
+            <Card className="bg-[#1e3a5f] border-2 border-[#00a8e6] shadow-lg sticky top-6">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Info className="h-5 w-5 text-[#e94e1b]" />
+                <CardTitle className="flex items-center gap-2 text-lg text-white">
+                  <Package className="h-5 w-5 text-[#00a8e6]" />
                   Offer Preview
                 </CardTitle>
               </CardHeader>
@@ -763,12 +730,12 @@ export default function CreateOfferPage() {
                 {selectedProduct ? (
                   <div className="space-y-4">
                     {/* Product Info */}
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <h4 className="font-medium text-gray-900 mb-1">
+                    <div className="p-3 bg-white/5 rounded-lg">
+                      <h4 className="font-medium text-white mb-1">
                         {selectedProduct.name}
                       </h4>
                       {selectedProduct.price && (
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-blue-200">
                           Original Price: ${parseFloat(selectedProduct.price).toFixed(2)}
                         </p>
                       )}
@@ -776,11 +743,11 @@ export default function CreateOfferPage() {
 
                     {/* Discount Preview */}
                     {getDiscountPreview() && (
-                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                        <h5 className="font-medium text-green-800 mb-1">
+                      <div className="p-3 bg-green-900/20 border border-green-400 rounded-lg">
+                        <h5 className="font-medium text-green-300 mb-1">
                           Savings Preview
                         </h5>
-                        <p className="text-sm text-green-700">
+                        <p className="text-sm text-green-200">
                           {getDiscountPreview()}
                         </p>
                       </div>
@@ -788,15 +755,15 @@ export default function CreateOfferPage() {
 
                     {/* Offer Duration */}
                     {formData.start_date && formData.expiry_date && (
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <h5 className="font-medium text-blue-800 mb-1">
+                      <div className="p-3 bg-blue-900/20 border border-blue-400 rounded-lg">
+                        <h5 className="font-medium text-blue-300 mb-1">
                           Offer Duration
                         </h5>
-                        <p className="text-sm text-blue-700">
+                        <p className="text-sm text-blue-200">
                           {new Date(formData.start_date).toLocaleDateString()} - {new Date(formData.expiry_date).toLocaleDateString()}
                         </p>
                         {formData.max_claims && (
-                          <p className="text-sm text-blue-700 mt-1">
+                          <p className="text-sm text-blue-200 mt-1">
                             Limited to {formData.max_claims} claims
                           </p>
                         )}
@@ -804,11 +771,11 @@ export default function CreateOfferPage() {
                     )}
 
                     {/* Discount Type Info */}
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <h5 className="font-medium text-gray-800 mb-2">
+                    <div className="p-3 bg-white/5 rounded-lg">
+                      <h5 className="font-medium text-white mb-2">
                         Discount Type: {formData.discount_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                       </h5>
-                      <div className="text-xs text-gray-600 space-y-1">
+                      <div className="text-xs text-blue-200 space-y-1">
                         {formData.discount_type === 'percentage' && (
                           <p>Customer gets a percentage off the product price</p>
                         )}
@@ -829,8 +796,8 @@ export default function CreateOfferPage() {
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <Tag className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-500 text-sm">
+                    <Tag className="h-12 w-12 text-blue-200 mx-auto mb-3" />
+                    <p className="text-blue-200 text-sm">
                       Select a product to see offer preview
                     </p>
                   </div>

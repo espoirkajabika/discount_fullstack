@@ -241,29 +241,29 @@ export default function CreateProductPage() {
           Back to Products
         </Button>
 
-        <Card className="bg-white border-0 shadow-lg">
+        <Card className="bg-[#1e3a5f] border-2 border-[#00a8e6] shadow-lg">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-[#e94e1b]" />
+            <CardTitle className="flex items-center gap-2 text-white">
+              <Package className="h-5 w-5 text-[#00a8e6]" />
               Product Information
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-blue-200">
               Enter the details for your new product
             </CardDescription>
           </CardHeader>
 
           <CardContent>
             {error && (
-              <Alert className="mb-6 border-red-200 bg-red-50">
-                <AlertCircle className="h-4 w-4 text-red-600" />
-                <AlertDescription className="text-red-800">{error}</AlertDescription>
+              <Alert className="mb-6 border-red-400 bg-red-900/20">
+                <AlertCircle className="h-4 w-4 text-red-400" />
+                <AlertDescription className="text-red-300">{error}</AlertDescription>
               </Alert>
             )}
 
             {success && (
-              <Alert className="mb-6 border-green-200 bg-green-50">
-                <AlertCircle className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-800">
+              <Alert className="mb-6 border-green-400 bg-green-900/20">
+                <AlertCircle className="h-4 w-4 text-green-400" />
+                <AlertDescription className="text-green-300">
                   Product created successfully! Redirecting to products page...
                 </AlertDescription>
               </Alert>
@@ -272,12 +272,12 @@ export default function CreateProductPage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Product Image Upload */}
               <div className="space-y-2">
-                <Label htmlFor="image" className="text-sm font-medium text-gray-700">
+                <Label className="text-white font-medium">
                   Product Image
                 </Label>
                 
                 {imagePreview ? (
-                  <div className="relative w-full h-48 bg-gray-100 rounded-lg overflow-hidden">
+                  <div className="relative w-full h-48 bg-white rounded-lg overflow-hidden">
                     <img 
                       src={imagePreview} 
                       alt="Product preview"
@@ -294,7 +294,7 @@ export default function CreateProductPage() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                  <div className="border-2 border-dashed border-white/20 rounded-lg p-6 text-center hover:border-white/40 transition-colors">
                     <input
                       type="file"
                       id="image"
@@ -303,11 +303,11 @@ export default function CreateProductPage() {
                       className="hidden"
                     />
                     <label htmlFor="image" className="cursor-pointer">
-                      <FileImage className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-sm text-gray-600 mb-2">
+                      <FileImage className="h-12 w-12 text-blue-200 mx-auto mb-4" />
+                      <p className="text-blue-200 mb-2">
                         Click to upload product image
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-blue-300">
                         JPEG, PNG, GIF or WebP (Max 5MB)
                       </p>
                     </label>
@@ -318,28 +318,26 @@ export default function CreateProductPage() {
               {/* Basic Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <Label htmlFor="name" className="text-sm font-medium text-gray-700">
+                  <Label className="text-white font-medium">
                     Product Name *
                   </Label>
                   <Input
-                    id="name"
                     name="name"
                     value={formData.name}
                     onChange={handleInputChange}
                     placeholder="Enter product name"
                     required
-                    className="mt-1"
+                    className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 mt-1"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="price" className="text-sm font-medium text-gray-700">
+                  <Label className="text-white font-medium">
                     Price
                   </Label>
-                  <div className="relative">
+                  <div className="relative mt-1">
                     <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                     <Input
-                      id="price"
                       name="price"
                       type="number"
                       step="0.01"
@@ -347,42 +345,41 @@ export default function CreateProductPage() {
                       value={formData.price}
                       onChange={handleInputChange}
                       placeholder="0.00"
-                      className="pl-10 mt-1"
+                      className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 pl-10"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <Label htmlFor="stock_quantity" className="text-sm font-medium text-gray-700">
+                  <Label className="text-white font-medium">
                     Stock Quantity
                   </Label>
                   <Input
-                    id="stock_quantity"
                     name="stock_quantity"
                     type="number"
                     min="0"
                     value={formData.stock_quantity}
                     onChange={handleInputChange}
                     placeholder="Available quantity"
-                    className="mt-1"
+                    className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 mt-1"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="category_id" className="text-sm font-medium text-gray-700">
+                  <Label className="text-white font-medium">
                     Category
                   </Label>
                   <Select 
                     value={formData.category_id} 
                     onValueChange={(value) => handleSelectChange('category_id', value)}
                   >
-                    <SelectTrigger className="mt-1">
+                    <SelectTrigger className="bg-[#1e3a5f] border-white/20 text-white mt-1">
                       <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No Category</SelectItem>
+                    <SelectContent className="bg-white border-gray-200">
+                      <SelectItem value="none" className="text-gray-900 hover:bg-gray-100">No Category</SelectItem>
                       {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id.toString()}>
+                        <SelectItem key={category.id} value={category.id.toString()} className="text-gray-900 hover:bg-gray-100">
                           {category.name}
                         </SelectItem>
                       ))}
@@ -391,50 +388,47 @@ export default function CreateProductPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="sku" className="text-sm font-medium text-gray-700">
+                  <Label className="text-white font-medium">
                     SKU
                   </Label>
                   <Input
-                    id="sku"
                     name="sku"
                     value={formData.sku}
                     onChange={handleInputChange}
                     placeholder="Product SKU"
-                    className="mt-1"
+                    className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 mt-1"
                   />
                 </div>
               </div>
 
               {/* Description */}
               <div>
-                <Label htmlFor="description" className="text-sm font-medium text-gray-700">
+                <Label className="text-white font-medium">
                   Description
                 </Label>
                 <Textarea
-                  id="description"
                   name="description"
                   value={formData.description}
                   onChange={handleInputChange}
                   placeholder="Describe your product..."
                   rows={4}
-                  className="mt-1 resize-none"
+                  className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 resize-none mt-1"
                 />
               </div>
 
               {/* Tags */}
               <div>
-                <Label htmlFor="tags" className="text-sm font-medium text-gray-700">
+                <Label className="text-white font-medium">
                   Tags
                 </Label>
                 <Input
-                  id="tags"
                   name="tags"
                   value={formData.tags}
                   onChange={handleInputChange}
                   placeholder="tag1, tag2, tag3"
-                  className="mt-1"
+                  className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 mt-1"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-blue-300 mt-1">
                   Separate tags with commas
                 </p>
               </div>
@@ -445,7 +439,7 @@ export default function CreateProductPage() {
                   type="button"
                   variant="outline"
                   onClick={() => router.back()}
-                  className="flex-1"
+                  className="flex-1 border-white/20 text-white hover:bg-white/10"
                   disabled={loading}
                 >
                   Cancel

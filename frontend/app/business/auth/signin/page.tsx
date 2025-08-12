@@ -276,7 +276,7 @@ export default function BusinessLogin() {
                     <span>Signing In...</span>
                   </div>
                 ) : (
-                  'Sign In to Dashboard'
+                  'Sign In'
                 )}
               </Button>
 

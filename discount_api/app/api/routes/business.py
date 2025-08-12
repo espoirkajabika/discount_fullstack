@@ -960,53 +960,38 @@ async def list_my_offers(
         )
 
 
-# Updated app/api/routes/business.py - Replace the existing create_offer function
-
 @router.post("/offers", response_model=dict)
 async def create_offer(
-    offer_data: dict,  # Use dict to handle all discount types
+    offer_data: dict,
     current_user: UserProfile = Depends(get_current_business_user)
 ):
-    """Create a new offer for the current business - supports all discount types"""
+    """Create a new offer with proper validation for all discount types"""
     
     try:
-        print(f"Creating offer for user: {current_user.id}")
-        print(f"Offer data: {offer_data}")
-        
         # Get user's business
         business_result = supabase_admin.table("businesses").select("id").eq("user_id", str(current_user.id)).execute()
         
         if not business_result.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Business not found. Please register your business first."
+                detail="Business not found"
             )
         
         business_id = business_result.data[0]["id"]
         
         # Validate product exists and belongs to business
-        if offer_data.get("product_id"):
-            product_check = supabase_admin.table("products").select("id, name, price").eq("id", offer_data["product_id"]).eq("business_id", business_id).execute()
-            if not product_check.data:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid product ID or product doesn't belong to your business"
-                )
-            product = product_check.data[0]
-        else:
+        product_result = supabase_admin.table("products").select("*").eq("id", offer_data["product_id"]).eq("business_id", business_id).execute()
+        
+        if not product_result.data:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Product ID is required"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Product not found"
             )
+        
+        product = product_result.data[0]
+        discount_type = offer_data.get("discount_type")
         
         # Validate discount type
-        discount_type = offer_data.get("discount_type")
-        if not discount_type:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Discount type is required"
-            )
-        
         allowed_discount_types = ["percentage", "fixed", "minimum_purchase", "quantity_discount", "bogo"]
         if discount_type not in allowed_discount_types:
             raise HTTPException(
@@ -1014,28 +999,32 @@ async def create_offer(
                 detail=f"Invalid discount type. Must be one of: {', '.join(allowed_discount_types)}"
             )
         
-        # Validate required fields based on discount type
-        if discount_type in ["percentage", "fixed"] and not offer_data.get("discount_value"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"discount_value is required for {discount_type} offers"
-            )
+        # === ENHANCED VALIDATION AND DEFAULT VALUE SETTING ===
         
-        if discount_type == "minimum_purchase":
+        # Handle discount_value based on offer type
+        if discount_type in ["percentage", "fixed"]:
+            if not offer_data.get("discount_value"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"discount_value is required for {discount_type} offers"
+                )
+        
+        elif discount_type == "minimum_purchase":
             if not offer_data.get("discount_value") or not offer_data.get("minimum_purchase_amount"):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="discount_value and minimum_purchase_amount are required for minimum_purchase offers"
                 )
         
-        if discount_type == "quantity_discount":
+        elif discount_type == "quantity_discount":
             if not offer_data.get("discount_value") or not offer_data.get("minimum_quantity"):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="discount_value and minimum_quantity are required for quantity_discount offers"
                 )
         
-        if discount_type == "bogo":
+        elif discount_type == "bogo":
+            # Validate BOGO-specific fields
             required_bogo_fields = ["buy_quantity", "get_quantity", "get_discount_percentage"]
             missing_fields = [field for field in required_bogo_fields if not offer_data.get(field)]
             if missing_fields:
@@ -1043,8 +1032,27 @@ async def create_offer(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"BOGO offers require: {', '.join(missing_fields)}"
                 )
+            
+            # CRITICAL FIX: Set discount_value to 0 for BOGO offers to avoid NULL constraint
+            offer_data["discount_value"] = 0.0
         
-        # Generate offer title if not provided
+        # === PRICE CALCULATIONS ===
+        original_price = float(product["price"]) if product["price"] else 0.0
+        
+        if discount_type == "percentage":
+            discount_amount = (original_price * float(offer_data["discount_value"])) / 100
+            discounted_price = original_price - discount_amount
+        elif discount_type == "fixed":
+            discount_amount = float(offer_data["discount_value"])
+            discounted_price = max(0, original_price - discount_amount)
+        elif discount_type in ["minimum_purchase", "quantity_discount"]:
+            # For these types, price calculation depends on context, so use original price
+            discounted_price = original_price
+        elif discount_type == "bogo":
+            # For BOGO, pricing is complex and context-dependent, use original price
+            discounted_price = original_price
+        
+        # === TITLE GENERATION ===
         title = offer_data.get("title")
         if not title:
             product_name = product['name']
@@ -1053,35 +1061,26 @@ async def create_offer(
             elif discount_type == "fixed":
                 title = f"${offer_data['discount_value']} Off {product_name}"
             elif discount_type == "minimum_purchase":
-                title = f"${offer_data['discount_value']} Off {product_name} (Min. Purchase ${offer_data['minimum_purchase_amount']})"
+                title = f"${offer_data['discount_value']} Off {product_name} (Min. ${offer_data['minimum_purchase_amount']})"
             elif discount_type == "quantity_discount":
-                title = f"Buy {offer_data['minimum_quantity']}+ {product_name} Get {offer_data['discount_value']}% Off Each"
+                title = f"Buy {offer_data['minimum_quantity']}+ {product_name}, Get {offer_data['discount_value']}% Off Each"
             elif discount_type == "bogo":
-                discount_text = "Free" if offer_data['get_discount_percentage'] == 100 else f"{offer_data['get_discount_percentage']}% Off"
-                title = f"Buy {offer_data['buy_quantity']} {product_name} Get {offer_data['get_quantity']} {discount_text}"
+                buy_qty = offer_data['buy_quantity']
+                get_qty = offer_data['get_quantity']
+                discount_pct = offer_data['get_discount_percentage']
+                if discount_pct == 100:
+                    title = f"Buy {buy_qty} {product_name}, Get {get_qty} Free"
+                else:
+                    title = f"Buy {buy_qty} {product_name}, Get {get_qty} at {discount_pct}% Off"
         
-        # Calculate prices for simple discount types
-        original_price = float(product["price"]) if product["price"] else 0
-        discounted_price = original_price  # Default to original price
-        
-        if discount_type == "percentage":
-            discount_percentage = float(offer_data["discount_value"])
-            discount_amount = original_price * (discount_percentage / 100)
-            discounted_price = original_price - discount_amount
-        elif discount_type == "fixed":
-            discount_amount = min(float(offer_data["discount_value"]), original_price)
-            discounted_price = original_price - discount_amount
-        # For other types, discounted_price is calculated dynamically
-        
-        # Create offer record with all new fields
+        # === PREPARE OFFER DATA ===
         offer_dict = {
-            "id": str(uuid.uuid4()),
             "business_id": business_id,
             "product_id": offer_data["product_id"],
             "title": title,
             "description": offer_data.get("description"),
             "discount_type": discount_type,
-            "discount_value": float(offer_data.get("discount_value", 0)) if offer_data.get("discount_value") else None,
+            "discount_value": float(offer_data.get("discount_value", 0)),  # Always provide a value
             "original_price": original_price,
             "discounted_price": discounted_price,
             "start_date": offer_data["start_date"],
@@ -1091,7 +1090,7 @@ async def create_offer(
             "is_active": offer_data.get("is_active", True),
             "terms_conditions": offer_data.get("terms_conditions"),
             
-            # New fields for different offer types
+            # Type-specific fields (set to None if not applicable)
             "minimum_purchase_amount": float(offer_data.get("minimum_purchase_amount")) if offer_data.get("minimum_purchase_amount") else None,
             "minimum_quantity": int(offer_data.get("minimum_quantity")) if offer_data.get("minimum_quantity") else None,
             "buy_quantity": int(offer_data.get("buy_quantity")) if offer_data.get("buy_quantity") else None,
@@ -1106,7 +1105,7 @@ async def create_offer(
         # Convert data for Supabase
         offer_dict = prepare_data_for_supabase(offer_dict)
         
-        print(f"Inserting offer: {offer_dict}")
+        print(f"Inserting offer with type {discount_type}: {offer_dict}")
         
         # Insert offer
         result = supabase_admin.table("offers").insert(offer_dict).execute()
@@ -1122,24 +1121,21 @@ async def create_offer(
             "*, products(*, categories(*)), businesses(business_name)"
         ).eq("id", result.data[0]["id"]).execute()
         
-        # Convert and fix structure
-        offer_response = convert_decimals_to_float(offer_with_product.data[0])
-        if 'products' in offer_response:
-            offer_response['product'] = offer_response['products']
-            del offer_response['products']
-        
-        return {"offer": offer_response}
+        return {
+            "success": True,
+            "message": f"{discount_type.title()} offer created successfully",
+            "offer": offer_with_product.data[0] if offer_with_product.data else result.data[0]
+        }
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error creating offer: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Offer creation failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Offer creation failed: {str(e)}"
         )
+
 
 @router.get("/offers/{offer_id}", response_model=dict)
 async def get_offer(
