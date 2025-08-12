@@ -57,7 +57,6 @@ export default function CreateProductPage() {
   const [imagePreview, setImagePreview] = useState(null)
   const [imageFile, setImageFile] = useState(null)
 
-  // Fetch categories on mount
   useEffect(() => {
     fetchCategories()
   }, [])
@@ -93,14 +92,12 @@ export default function CreateProductPage() {
   const handleImageChange = (e) => {
     const file = e.target.files[0]
     if (file) {
-      // Validate file type
       const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
       if (!allowedTypes.includes(file.type)) {
         setError('Please select a valid image file (JPEG, PNG, GIF, or WebP)')
         return
       }
 
-      // Validate file size (5MB limit)
       if (file.size > 5 * 1024 * 1024) {
         setError('Image file size must be less than 5MB')
         return
@@ -108,7 +105,6 @@ export default function CreateProductPage() {
 
       setImageFile(file)
       
-      // Create preview
       const reader = new FileReader()
       reader.onload = (e) => {
         setImagePreview(e.target.result)
@@ -177,7 +173,6 @@ export default function CreateProductPage() {
     setSuccess(false)
 
     try {
-      // Upload image first if selected
       let imagePath = formData.image_url
       if (imageFile) {
         imagePath = await uploadImage()
@@ -187,7 +182,6 @@ export default function CreateProductPage() {
         }
       }
 
-      // Prepare product data
       const productData = {
         name: formData.name.trim(),
         description: formData.description.trim() || null,
@@ -199,8 +193,6 @@ export default function CreateProductPage() {
         image_url: imagePath || null,
         is_active: formData.is_active
       }
-
-      console.log('Creating product with data:', productData)
 
       const result = await createProduct(productData)
       
@@ -221,7 +213,7 @@ export default function CreateProductPage() {
   }
 
   if (!user || !user.is_business) {
-    return null // BusinessLayout will handle the redirect
+    return null
   }
 
   return (
@@ -230,38 +222,37 @@ export default function CreateProductPage() {
       subtitle="Add a new product to your catalog"
       activeTab="products"
     >
-      <div className="max-w-2xl mx-auto">
-        {/* Back Button */}
+      <div className="max-w-7xl mx-auto px-4">
         <Button 
           variant="outline" 
           onClick={() => router.back()}
-          className="mb-6 hover:bg-gray-50"
+          className="mb-4 hover:bg-gray-50"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Products
         </Button>
 
         <Card className="bg-[#1e3a5f] border-2 border-[#00a8e6] shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-white">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-white text-lg">
               <Package className="h-5 w-5 text-[#00a8e6]" />
               Product Information
             </CardTitle>
-            <CardDescription className="text-blue-200">
+            <CardDescription className="text-blue-200 text-sm">
               Enter the details for your new product
             </CardDescription>
           </CardHeader>
 
           <CardContent>
             {error && (
-              <Alert className="mb-6 border-red-400 bg-red-900/20">
+              <Alert className="mb-4 border-red-400 bg-red-900/20">
                 <AlertCircle className="h-4 w-4 text-red-400" />
                 <AlertDescription className="text-red-300">{error}</AlertDescription>
               </Alert>
             )}
 
             {success && (
-              <Alert className="mb-6 border-green-400 bg-green-900/20">
+              <Alert className="mb-4 border-green-400 bg-green-900/20">
                 <AlertCircle className="h-4 w-4 text-green-400" />
                 <AlertDescription className="text-green-300">
                   Product created successfully! Redirecting to products page...
@@ -270,71 +261,78 @@ export default function CreateProductPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Product Image Upload */}
-              <div className="space-y-2">
-                <Label className="text-white font-medium">
-                  Product Image
-                </Label>
-                
-                {imagePreview ? (
-                  <div className="relative w-full h-48 bg-white rounded-lg overflow-hidden">
-                    <img 
-                      src={imagePreview} 
-                      alt="Product preview"
-                      className="w-full h-full object-cover"
-                    />
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      onClick={removeImage}
-                      className="absolute top-2 right-2"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="border-2 border-dashed border-white/20 rounded-lg p-6 text-center hover:border-white/40 transition-colors">
-                    <input
-                      type="file"
-                      id="image"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="hidden"
-                    />
-                    <label htmlFor="image" className="cursor-pointer">
-                      <FileImage className="h-12 w-12 text-blue-200 mx-auto mb-4" />
-                      <p className="text-blue-200 mb-2">
-                        Click to upload product image
-                      </p>
-                      <p className="text-xs text-blue-300">
-                        JPEG, PNG, GIF or WebP (Max 5MB)
-                      </p>
-                    </label>
-                  </div>
-                )}
-              </div>
-
-              {/* Basic Information */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <Label className="text-white font-medium">
-                    Product Name *
-                  </Label>
-                  <Input
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    placeholder="Enter product name"
-                    required
-                    className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 mt-1"
-                  />
+              {/* Top Row: Image + Basic Info */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Product Image */}
+                <div className="space-y-2">
+                  <Label className="text-white font-medium text-sm">Product Image</Label>
+                  {imagePreview ? (
+                    <div className="relative w-full h-48 bg-white rounded-lg overflow-hidden">
+                      <img 
+                        src={imagePreview} 
+                        alt="Product preview"
+                        className="w-full h-full object-cover"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={removeImage}
+                        className="absolute top-2 right-2 h-8 w-8 p-0"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed border-white/20 rounded-lg p-6 text-center hover:border-white/40 transition-colors h-48 flex flex-col justify-center">
+                      <input
+                        type="file"
+                        id="image"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        className="hidden"
+                      />
+                      <label htmlFor="image" className="cursor-pointer">
+                        <FileImage className="h-10 w-10 text-blue-200 mx-auto mb-2" />
+                        <p className="text-blue-200 text-sm mb-1">Click to upload</p>
+                        <p className="text-xs text-blue-300">Max 5MB</p>
+                      </label>
+                    </div>
+                  )}
                 </div>
 
+                {/* Product Name and Description */}
+                <div className="lg:col-span-2 space-y-4">
+                  <div>
+                    <Label className="text-white font-medium text-sm">Product Name *</Label>
+                    <Input
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      placeholder="Enter product name"
+                      required
+                      className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 mt-1 h-10"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label className="text-white font-medium text-sm">Description</Label>
+                    <Textarea
+                      name="description"
+                      value={formData.description}
+                      onChange={handleInputChange}
+                      placeholder="Describe your product..."
+                      rows={4}
+                      className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 resize-none mt-1"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Second Row: Price, Stock, Category, SKU */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                  <Label className="text-white font-medium">
-                    Price
-                  </Label>
+                  <Label className="text-white font-medium text-sm">Price</Label>
                   <div className="relative mt-1">
                     <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                     <Input
@@ -345,15 +343,13 @@ export default function CreateProductPage() {
                       value={formData.price}
                       onChange={handleInputChange}
                       placeholder="0.00"
-                      className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 pl-10"
+                      className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 pl-10 h-10"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <Label className="text-white font-medium">
-                    Stock Quantity
-                  </Label>
+                  <Label className="text-white font-medium text-sm">Stock Quantity</Label>
                   <Input
                     name="stock_quantity"
                     type="number"
@@ -361,20 +357,18 @@ export default function CreateProductPage() {
                     value={formData.stock_quantity}
                     onChange={handleInputChange}
                     placeholder="Available quantity"
-                    className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 mt-1"
+                    className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 mt-1 h-10"
                   />
                 </div>
 
                 <div>
-                  <Label className="text-white font-medium">
-                    Category
-                  </Label>
+                  <Label className="text-white font-medium text-sm">Category</Label>
                   <Select 
                     value={formData.category_id} 
                     onValueChange={(value) => handleSelectChange('category_id', value)}
                   >
-                    <SelectTrigger className="bg-[#1e3a5f] border-white/20 text-white mt-1">
-                      <SelectValue placeholder="Select a category" />
+                    <SelectTrigger className="bg-[#1e3a5f] border-white/20 text-white mt-1 h-10">
+                      <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent className="bg-white border-gray-200">
                       <SelectItem value="none" className="text-gray-900 hover:bg-gray-100">No Category</SelectItem>
@@ -388,65 +382,44 @@ export default function CreateProductPage() {
                 </div>
 
                 <div>
-                  <Label className="text-white font-medium">
-                    SKU
-                  </Label>
+                  <Label className="text-white font-medium text-sm">SKU</Label>
                   <Input
                     name="sku"
                     value={formData.sku}
                     onChange={handleInputChange}
                     placeholder="Product SKU"
-                    className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 mt-1"
+                    className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 mt-1 h-10"
                   />
                 </div>
               </div>
 
-              {/* Description */}
+              {/* Third Row: Tags */}
               <div>
-                <Label className="text-white font-medium">
-                  Description
-                </Label>
-                <Textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  placeholder="Describe your product..."
-                  rows={4}
-                  className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 resize-none mt-1"
-                />
-              </div>
-
-              {/* Tags */}
-              <div>
-                <Label className="text-white font-medium">
-                  Tags
-                </Label>
+                <Label className="text-white font-medium text-sm">Tags</Label>
                 <Input
                   name="tags"
                   value={formData.tags}
                   onChange={handleInputChange}
                   placeholder="tag1, tag2, tag3"
-                  className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 mt-1"
+                  className="bg-[#1e3a5f] border-white/20 text-white placeholder:text-gray-400 mt-1 h-10"
                 />
-                <p className="text-xs text-blue-300 mt-1">
-                  Separate tags with commas
-                </p>
+                <p className="text-xs text-blue-300 mt-1">Separate tags with commas</p>
               </div>
 
               {/* Submit Buttons */}
-              <div className="flex gap-3 pt-6">
+              <div className="flex gap-4 pt-4 border-t border-white/10">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => router.back()}
-                  className="flex-1 border-white/20 text-white hover:bg-white/10"
+                  className="px-8 border-white/20 text-black hover:bg-white/10 h-11"
                   disabled={loading}
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
-                  className="flex-1 bg-[#e94e1b] hover:bg-[#d13f16] text-white"
+                  className="px-8 bg-[#e94e1b] hover:bg-[#d13f16] text-white h-11"
                   disabled={loading || imageUploading}
                 >
                   {loading ? (
