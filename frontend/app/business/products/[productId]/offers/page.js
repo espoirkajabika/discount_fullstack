@@ -9,6 +9,16 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { 
   Select,
   SelectContent,
@@ -68,6 +78,23 @@ export default function ProductOffersPage() {
   const [sortOrder, setSortOrder] = useState('desc')
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 12
+  
+  // Dialog states
+  const [pauseDialog, setPauseDialog] = useState({
+    isOpen: false,
+    offerId: null,
+    offerTitle: '',
+    isActive: false,
+    action: '',
+    isLoading: false
+  })
+  
+  const [deleteDialog, setDeleteDialog] = useState({
+    isOpen: false,
+    offerId: null,
+    offerTitle: '',
+    isDeleting: false
+  })
 
   useEffect(() => {
     if (user && user.is_business && productId) {
@@ -193,31 +220,95 @@ export default function ProductOffersPage() {
     router.push(`/business/offers/${offerId}`)
   }
 
-  const handlePauseResume = async (offerId, isActive) => {
-    try {
-      const result = isActive ? await pauseOffer(offerId) : await resumeOffer(offerId)
-      if (result.success) {
-        await fetchData()
-      } else {
-        alert(`Failed to ${isActive ? 'pause' : 'resume'} offer: ` + result.error)
-      }
-    } catch (error) {
-      alert(`Error ${isActive ? 'pausing' : 'resuming'} offer`)
+  // Open pause dialog
+  const openPauseDialog = (offer, isActive) => {
+    setPauseDialog({
+      isOpen: true,
+      offerId: offer.id,
+      offerTitle: offer.title,
+      isActive,
+      action: isActive ? 'pause' : 'resume',
+      isLoading: false
+    })
+  }
+
+  // Close pause dialog
+  const closePauseDialog = () => {
+    if (!pauseDialog.isLoading) {
+      setPauseDialog({
+        isOpen: false,
+        offerId: null,
+        offerTitle: '',
+        isActive: false,
+        action: '',
+        isLoading: false
+      })
     }
   }
 
-  const handleDelete = async (offerId) => {
-    if (window.confirm('Are you sure you want to delete this offer? This action cannot be undone.')) {
-      try {
-        const result = await deleteOffer(offerId)
-        if (result.success) {
-          await fetchData()
-        } else {
-          alert('Failed to delete offer: ' + result.error)
-        }
-      } catch (error) {
-        alert('Error deleting offer')
+  // Handle pause/resume confirmation
+  const handleConfirmPauseResume = async () => {
+    try {
+      setPauseDialog(prev => ({ ...prev, isLoading: true }))
+      
+      const result = pauseDialog.isActive 
+        ? await pauseOffer(pauseDialog.offerId) 
+        : await resumeOffer(pauseDialog.offerId)
+      
+      if (result.success) {
+        await fetchData()
+        closePauseDialog()
+      } else {
+        setError(`Failed to ${pauseDialog.action} offer: ` + result.error)
+        closePauseDialog()
       }
+    } catch (error) {
+      console.error(`Error ${pauseDialog.action} offer:`, error)
+      setError(`Error ${pauseDialog.action} offer`)
+      closePauseDialog()
+    }
+  }
+
+  // Open delete dialog
+  const openDeleteDialog = (offer) => {
+    setDeleteDialog({
+      isOpen: true,
+      offerId: offer.id,
+      offerTitle: offer.title,
+      isDeleting: false
+    })
+  }
+
+  // Close delete dialog
+  const closeDeleteDialog = () => {
+    if (!deleteDialog.isDeleting) {
+      setDeleteDialog({
+        isOpen: false,
+        offerId: null,
+        offerTitle: '',
+        isDeleting: false
+      })
+    }
+  }
+
+  // Handle delete confirmation
+  const handleConfirmDelete = async () => {
+    try {
+      setDeleteDialog(prev => ({ ...prev, isDeleting: true }))
+      
+      const result = await deleteOffer(deleteDialog.offerId)
+      
+      if (result.success) {
+        await fetchData()
+        closeDeleteDialog()
+      } else {
+        setError('Failed to delete offer: ' + result.error)
+        closeDeleteDialog()
+      }
+    } catch (error) {
+      console.error('Error deleting offer:', error)
+      setError('Error deleting offer')
+      closeDeleteDialog()
     }
   }
 
@@ -445,10 +536,10 @@ export default function ProductOffersPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {paginatedOffers.map((offer) => (
-              <Card key={offer.id} className="bg-white border-0 shadow-lg hover:shadow-xl transition-shadow">
-                <CardContent className="p-0">
+              <Card key={offer.id} className="bg-white border-0 shadow-lg hover:shadow-xl transition-shadow h-[420px] flex flex-col">
+                <CardContent className="p-0 flex flex-col h-full">
                   {/* Offer Image */}
-                  <div className="relative h-48 bg-gray-200 rounded-t-lg overflow-hidden">
+                  <div className="relative h-48 bg-gray-200 overflow-hidden">
                     {offer.image_url || product?.image_url ? (
                       <img 
                         src={offer.image_url || product?.image_url} 
@@ -491,19 +582,19 @@ export default function ProductOffersPage() {
                             Edit Offer
                           </DropdownMenuItem>
                           {offer.status === 'active' || offer.status === 'scheduled' ? (
-                            <DropdownMenuItem onClick={() => handlePauseResume(offer.id, true)}>
+                            <DropdownMenuItem onClick={() => openPauseDialog(offer, true)}>
                               <Pause className="h-4 w-4 mr-2" />
                               Pause Offer
                             </DropdownMenuItem>
                           ) : offer.status === 'paused' ? (
-                            <DropdownMenuItem onClick={() => handlePauseResume(offer.id, false)}>
+                            <DropdownMenuItem onClick={() => openPauseDialog(offer, false)}>
                               <Play className="h-4 w-4 mr-2" />
                               Resume Offer
                             </DropdownMenuItem>
                           ) : null}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem 
-                            onClick={() => handleDelete(offer.id)}
+                            onClick={() => openDeleteDialog(offer)}
                             className="text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
                             <Trash className="h-4 w-4 mr-2" />
@@ -515,7 +606,7 @@ export default function ProductOffersPage() {
                   </div>
 
                   {/* Offer Details */}
-                  <div className="p-4">
+                  <div className="px-4 pb-4 flex flex-col flex-grow">
                     <div className="flex items-start justify-between mb-2">
                       <h3 className="font-semibold text-gray-900 line-clamp-2">{offer.title}</h3>
                     </div>
@@ -542,7 +633,7 @@ export default function ProductOffersPage() {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 mt-auto pt-4">
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -591,6 +682,102 @@ export default function ProductOffersPage() {
           )}
         </>
       )}
+
+      {/* Pause/Resume Confirmation Dialog */}
+      <AlertDialog open={pauseDialog.isOpen} onOpenChange={closePauseDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              {pauseDialog.action === 'pause' ? (
+                <Pause className="h-5 w-5 text-yellow-600" />
+              ) : (
+                <Play className="h-5 w-5 text-green-600" />
+              )}
+              {pauseDialog.action === 'pause' ? 'Pause Offer' : 'Resume Offer'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to {pauseDialog.action} <strong>"{pauseDialog.offerTitle}"</strong>? 
+              {pauseDialog.action === 'pause' 
+                ? ' Customers will no longer be able to claim this offer until you resume it.'
+                : ' Customers will be able to claim this offer again.'
+              }
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={closePauseDialog}
+              disabled={pauseDialog.isLoading}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmPauseResume}
+              disabled={pauseDialog.isLoading}
+              className={pauseDialog.action === 'pause' 
+                ? "bg-yellow-600 hover:bg-yellow-700 text-white"
+                : "bg-green-600 hover:bg-green-700 text-white"
+              }
+            >
+              {pauseDialog.isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {pauseDialog.action === 'pause' ? 'Pausing...' : 'Resuming...'}
+                </>
+              ) : (
+                <>
+                  {pauseDialog.action === 'pause' ? (
+                    <Pause className="h-4 w-4 mr-2" />
+                  ) : (
+                    <Play className="h-4 w-4 mr-2" />
+                  )}
+                  {pauseDialog.action === 'pause' ? 'Pause Offer' : 'Resume Offer'}
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialog.isOpen} onOpenChange={closeDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash className="h-5 w-5 text-red-600" />
+              Delete Offer
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>"{deleteDialog.offerTitle}"</strong>? 
+              This action cannot be undone and will permanently remove the offer and all associated claims.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={closeDeleteDialog}
+              disabled={deleteDialog.isDeleting}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleteDialog.isDeleting}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deleteDialog.isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash className="h-4 w-4 mr-2" />
+                  Delete Offer
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </BusinessLayout>
   )
 }

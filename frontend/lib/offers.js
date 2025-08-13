@@ -50,7 +50,7 @@ export async function updateOffer(offerId, offerData) {
     console.log('Updating offer:', offerId, 'with data:', offerData)
     
     const response = await makeAuthenticatedRequest(`/business/offers/${offerId}`, {
-      method: 'PUT',
+      method: 'PATCH',
       body: JSON.stringify(offerData),
     })
     
@@ -110,27 +110,22 @@ export async function deleteOffer(offerId) {
 }
 
 /**
- * Pause offer
+ * Pause offer by setting is_active to false
  */
 export async function pauseOffer(offerId) {
   try {
     console.log('Pausing offer:', offerId)
     
-    const response = await makeAuthenticatedRequest(`/business/offers/${offerId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ is_active: false }),
-    })
+    // Use the existing updateOffer function to set is_active to false
+    const result = await updateOffer(offerId, { is_active: false })
     
-    if (!response || !response.ok) {
-      const data = await response?.json()
-      console.error('Offer pause failed:', data)
-      return { error: data?.detail || 'Failed to pause offer' }
+    if (result.success) {
+      console.log('Offer paused successfully:', result.offer)
+      return { success: true, offer: result.offer }
+    } else {
+      console.error('Offer pause failed:', result.error)
+      return { error: result.error }
     }
-    
-    const data = await response.json()
-    console.log('Offer paused successfully:', data)
-    
-    return { success: true, offer: data.offer || data }
   } catch (error) {
     console.error('Pause offer error:', error)
     return { error: 'Network error. Please try again.' }
@@ -138,27 +133,22 @@ export async function pauseOffer(offerId) {
 }
 
 /**
- * Resume offer
+ * Resume offer by setting is_active to true
  */
 export async function resumeOffer(offerId) {
   try {
     console.log('Resuming offer:', offerId)
     
-    const response = await makeAuthenticatedRequest(`/business/offers/${offerId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ is_active: true }),
-    })
+    // Use the existing updateOffer function to set is_active to true
+    const result = await updateOffer(offerId, { is_active: true })
     
-    if (!response || !response.ok) {
-      const data = await response?.json()
-      console.error('Offer resume failed:', data)
-      return { error: data?.detail || 'Failed to resume offer' }
+    if (result.success) {
+      console.log('Offer resumed successfully:', result.offer)
+      return { success: true, offer: result.offer }
+    } else {
+      console.error('Offer resume failed:', result.error)
+      return { error: result.error }
     }
-    
-    const data = await response.json()
-    console.log('Offer resumed successfully:', data)
-    
-    return { success: true, offer: data.offer || data }
   } catch (error) {
     console.error('Resume offer error:', error)
     return { error: 'Network error. Please try again.' }

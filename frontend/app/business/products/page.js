@@ -360,10 +360,10 @@ export default function ProductsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {products.map((product) => (
-            <Card key={product.id} className="bg-white border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-              <CardContent className="p-0">
+            <Card key={product.id} className="bg-white border-gray-200 shadow-sm hover:shadow-md transition-shadow h-[420px] flex flex-col">
+              <CardContent className="p-0 flex flex-col h-full">
                 {/* Product Image */}
-                <div className="relative aspect-square bg-gray-100 rounded-t-lg overflow-hidden">
+                <div className="relative aspect-square bg-gray-100 overflow-hidden">
                   {product.image_url ? (
                     <img
                       src={product.image_url}
@@ -436,7 +436,7 @@ export default function ProductsPage() {
                 </div>
 
                 {/* Product Info */}
-                <div className="p-4">
+                <div className="px-4 pb-4 flex flex-col flex-grow">
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="font-semibold text-gray-900 line-clamp-2">{product.name}</h3>
                   </div>
@@ -459,7 +459,7 @@ export default function ProductsPage() {
                   )}
 
                   {/* Action Buttons */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 mt-auto pt-4">
                     <Button 
                       variant="outline" 
                       size="sm" 

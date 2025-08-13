@@ -92,9 +92,14 @@ function StatsCards({ stats }) {
 
 // Recent Offers Component
 function RecentOffers({ offers, loading, onCreateOffer, onViewAll, onRefresh }) {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState('Active')
   
   const tabs = ['Active', 'Expired', 'Scheduled']
+  
+  const handleOfferClick = (offerId) => {
+    router.push(`/business/offers/${offerId}`)
+  }
   
   const getOfferStatus = (offer) => {
     const now = new Date()
@@ -158,7 +163,11 @@ function RecentOffers({ offers, loading, onCreateOffer, onViewAll, onRefresh }) 
         ) : filteredOffers.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredOffers.slice(0, 6).map((offer, index) => (
-              <div key={offer.id || index} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+              <div 
+                key={offer.id || index} 
+                className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer hover:border-[#e94e1b]"
+                onClick={() => handleOfferClick(offer.id)}
+              >
                 <div className="flex flex-col h-full space-y-3">
                   {/* Offer Image */}
                   <div className="w-full h-32 bg-gray-100 rounded-lg overflow-hidden">
@@ -272,6 +281,10 @@ function ProductsTable({ products, loading, onNewProduct, onViewAll, onRefresh, 
     }
   }
 
+  const handleProductClick = (productId) => {
+    router.push(`/business/products/${productId}/offers`)
+  }
+
   return (
     <Card className="bg-white border-0 shadow-lg">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
@@ -307,7 +320,11 @@ function ProductsTable({ products, loading, onNewProduct, onViewAll, onRefresh, 
               </thead>
               <tbody>
                 {products.slice(0, 5).map((product, index) => (
-                  <tr key={product.id || index} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr 
+                    key={product.id || index} 
+                    className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleProductClick(product.id)}
+                  >
                     <td className="py-4 px-4">
                       <div className="flex items-center space-x-3">
                         <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
@@ -339,7 +356,7 @@ function ProductsTable({ products, loading, onNewProduct, onViewAll, onRefresh, 
                         {product.price ? `$${parseFloat(product.price).toFixed(2)}` : 'N/A'}
                       </span>
                     </td>
-                    <td className="py-4 px-4">
+                    <td className="py-4 px-4" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" className="h-8 w-8 p-0">
