@@ -112,7 +112,7 @@ export default function BusinessSignup() {
     loadCategories();
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -120,21 +120,21 @@ export default function BusinessSignup() {
     }));
   };
 
-  const handleCategoryChange = (value) => {
+  const handleCategoryChange = (value: string) => {
     setFormData((prev) => ({
       ...prev,
       category_id: value ? parseInt(value) : null,
     }));
   };
 
-  const togglePasswordVisibility = (field) => {
+  const togglePasswordVisibility = (field: keyof typeof showPassword) => {
     setShowPassword((prev) => ({
       ...prev,
       [field]: !prev[field],
     }));
   };
 
-  const handleLocationSelect = (locationData) => {
+  const handleLocationSelect = (locationData: any) => {
     if (locationData === null) {
       setFormData((prev) => ({
         ...prev,
@@ -179,7 +179,7 @@ export default function BusinessSignup() {
     return true;
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true); // ✅ Changed from setLoading to setIsLoading
@@ -199,7 +199,7 @@ export default function BusinessSignup() {
       }
 
       // Helper function to clean values
-      const cleanValue = (value) => {
+      const cleanValue = (value: any) => {
         if (value === "" || value === undefined) return null;
         return value;
       };
