@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import BusinessLayout from '@/components/BusinessLayout'
@@ -34,7 +34,7 @@ import {
 import { createOffer } from '@/lib/offers'
 import { getProducts } from '@/lib/products'
 
-export default function CreateOfferPage() {
+function CreateOfferForm() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -744,5 +744,18 @@ export default function CreateOfferPage() {
         </div>
       </div>
     </BusinessLayout>
+  )
+}
+
+export default function CreateOfferPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center items-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-[#e94e1b]" />
+        <span className="ml-2 text-gray-600">Loading...</span>
+      </div>
+    }>
+      <CreateOfferForm />
+    </Suspense>
   )
 }
