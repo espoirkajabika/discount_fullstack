@@ -72,7 +72,7 @@ export default function BusinessSignup() {
     business_website: "",
     avatar_url: "",
     business_hours: null,
-    category_id: null,
+    category_id: null as number | null,
 
     // Location fields
     latitude: null,
