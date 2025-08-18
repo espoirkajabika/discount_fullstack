@@ -116,7 +116,7 @@ export default function ProductsPage() {
           setBusinessName(processedProducts[0].business.business_name || '')
         }
       } else {
-        setError(result.error || 'Failed to fetch products')
+        setError(typeof result.error === 'string' ? result.error : 'Failed to fetch products')
       }
     } catch (error) {
       console.error('Error fetching products:', error)
@@ -223,7 +223,7 @@ export default function ProductsPage() {
         // Show success message briefly
         setError(null)
       } else {
-        setError('Failed to delete product: ' + result.error)
+        setError('Failed to delete product: ' + (typeof result.error === 'string' ? result.error : 'Unknown error'))
         closeDeleteDialog()
       }
     } catch (error) {
@@ -258,7 +258,9 @@ export default function ProductsPage() {
       {error && (
         <Alert className="mb-6 border-red-200 bg-red-50">
           <AlertCircle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="text-red-800">{error}</AlertDescription>
+          <AlertDescription className="text-red-800">
+            {typeof error === 'string' ? error : 'An error occurred'}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -358,12 +360,12 @@ export default function ProductsPage() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {products.map((product) => (
-            <Card key={product.id} className="bg-white border-gray-200 shadow-sm hover:shadow-md transition-shadow h-[420px] flex flex-col">
+            <Card key={product.id} className="bg-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 h-[420px] flex flex-col overflow-hidden py-0">
               <CardContent className="p-0 flex flex-col h-full">
                 {/* Product Image */}
-                <div className="relative aspect-square bg-gray-100 overflow-hidden">
+                <div className="relative h-48 bg-gray-200 overflow-hidden rounded-t-lg">
                   {product.image_url ? (
                     <img
                       src={product.image_url}
@@ -383,7 +385,7 @@ export default function ProductsPage() {
                         <Button
                           variant="secondary"
                           size="sm"
-                          className="h-8 w-8 p-0 bg-white/90 hover:bg-white shadow-sm"
+                          className="h-8 w-8 p-0 bg-white/90 hover:bg-white shadow-sm transition-all duration-200"
                         >
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
@@ -453,13 +455,13 @@ export default function ProductsPage() {
                   </div>
 
                   {product.description && (
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                    <p className="text-sm text-gray-600 mb-2 line-clamp-2">
                       {product.description}
                     </p>
                   )}
 
                   {/* Action Buttons */}
-                  <div className="flex gap-2 mt-auto pt-4">
+                  <div className="flex gap-2 mt-auto pt-2">
                     <Button 
                       variant="outline" 
                       size="sm" 

@@ -114,7 +114,7 @@ export default function ProductOffersPage() {
       // Fetch product details
       const productResult = await getProduct(productId)
       if (!productResult.success) {
-        setError(productResult.error || 'Failed to fetch product')
+        setError(typeof productResult.error === 'string' ? productResult.error : 'Failed to fetch product')
         return
       }
       
@@ -128,7 +128,7 @@ export default function ProductOffersPage() {
       // Fetch offers for this specific product
       const offersResult = await getOffers({ product_id: productId })
       if (!offersResult.success) {
-        setError(offersResult.error || 'Failed to fetch offers')
+        setError(typeof offersResult.error === 'string' ? offersResult.error : 'Failed to fetch offers')
         return
       }
       
@@ -259,7 +259,7 @@ export default function ProductOffersPage() {
         await fetchData()
         closePauseDialog()
       } else {
-        setError(`Failed to ${pauseDialog.action} offer: ` + result.error)
+        setError(`Failed to ${pauseDialog.action} offer: ` + (typeof result.error === 'string' ? result.error : 'Unknown error'))
         closePauseDialog()
       }
     } catch (error) {
@@ -302,7 +302,7 @@ export default function ProductOffersPage() {
         await fetchData()
         closeDeleteDialog()
       } else {
-        setError('Failed to delete offer: ' + result.error)
+        setError('Failed to delete offer: ' + (typeof result.error === 'string' ? result.error : 'Unknown error'))
         closeDeleteDialog()
       }
     } catch (error) {
@@ -438,7 +438,9 @@ export default function ProductOffersPage() {
       {error && (
         <Alert className="mb-6 border-red-200 bg-red-50">
           <AlertCircle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="text-red-800">{error}</AlertDescription>
+          <AlertDescription className="text-red-800">
+            {typeof error === 'string' ? error : 'An error occurred'}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -536,10 +538,10 @@ export default function ProductOffersPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {paginatedOffers.map((offer) => (
-              <Card key={offer.id} className="bg-white border-0 shadow-lg hover:shadow-xl transition-shadow h-[420px] flex flex-col">
+              <Card key={offer.id} className="bg-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 h-[420px] flex flex-col overflow-hidden py-0">
                 <CardContent className="p-0 flex flex-col h-full">
                   {/* Offer Image */}
-                  <div className="relative h-48 bg-gray-200 overflow-hidden">
+                  <div className="relative h-48 bg-gray-200 overflow-hidden rounded-t-lg">
                     {offer.image_url || product?.image_url ? (
                       <img 
                         src={offer.image_url || product?.image_url} 
@@ -568,7 +570,7 @@ export default function ProductOffersPage() {
                     <div className="absolute top-2 right-2">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="secondary" size="sm" className="h-8 w-8 p-0 bg-white/90 hover:bg-white">
+                          <Button variant="secondary" size="sm" className="h-8 w-8 p-0 bg-white/90 hover:bg-white shadow-sm transition-all duration-200">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -612,13 +614,13 @@ export default function ProductOffersPage() {
                     </div>
                     
                     {offer.description && (
-                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                      <p className="text-sm text-gray-600 mb-2 line-clamp-2">
                         {offer.description}
                       </p>
                     )}
 
                     {/* Offer Stats */}
-                    <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
                       <div className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
                         <span>{formatDate(offer.start_date)}</span>
@@ -633,7 +635,7 @@ export default function ProductOffersPage() {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex gap-2 mt-auto pt-4">
+                    <div className="flex gap-2 mt-auto pt-2">
                       <Button 
                         variant="outline" 
                         size="sm" 

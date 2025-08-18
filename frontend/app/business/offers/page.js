@@ -71,15 +71,15 @@ export default function OffersPage() {
   const [pagination, setPagination] = useState({})
   const ITEMS_PER_PAGE = 12
 
-  // Offer status calculation
+  // Offer status calculation to match backend
   const getOfferStatus = (offer) => {
     const now = new Date()
     const isActive = offer.is_active === true
     const startDate = new Date(offer.start_date)
     const expiryDate = new Date(offer.expiry_date)
     
-    if (!isActive) return 'paused'
-    if (startDate > now) return 'scheduled'
+    if (!isActive) return 'inactive'
+    if (startDate > now) return 'upcoming'
     if (expiryDate < now) return 'expired'
     return 'active'
   }
@@ -87,9 +87,9 @@ export default function OffersPage() {
   const getStatusBadge = (status) => {
     const configs = {
       active: { color: 'bg-green-100 text-green-800', label: 'Active', icon: CheckCircle },
-      scheduled: { color: 'bg-blue-100 text-blue-800', label: 'Scheduled', icon: Calendar },
+      upcoming: { color: 'bg-blue-100 text-blue-800', label: 'Scheduled', icon: Calendar },
       expired: { color: 'bg-gray-100 text-gray-800', label: 'Expired', icon: Clock },
-      paused: { color: 'bg-yellow-100 text-yellow-800', label: 'Paused', icon: Pause }
+      inactive: { color: 'bg-yellow-100 text-yellow-800', label: 'Paused', icon: Pause }
     }
     
     const config = configs[status] || configs.expired
@@ -136,7 +136,7 @@ export default function OffersPage() {
         setPagination(result.pagination || {})
         setTotalPages(result.pagination?.totalPages || 1)
       } else {
-        setError(result.error || 'Failed to fetch offers')
+        setError(typeof result.error === 'string' ? result.error : 'Failed to fetch offers')
       }
     } catch (error) {
       console.error('Error fetching offers:', error)
@@ -272,7 +272,9 @@ export default function OffersPage() {
       {error && (
         <Alert className="mb-6 border-red-200 bg-red-50">
           <AlertCircle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="text-red-800">{error}</AlertDescription>
+          <AlertDescription className="text-red-800">
+            {typeof error === 'string' ? error : 'An error occurred'}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -317,8 +319,8 @@ export default function OffersPage() {
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
-                <SelectItem value="paused">Paused</SelectItem>
+                <SelectItem value="upcoming">Scheduled</SelectItem>
+                <SelectItem value="inactive">Paused</SelectItem>
                 <SelectItem value="expired">Expired</SelectItem>
               </SelectContent>
             </Select>
@@ -337,8 +339,7 @@ export default function OffersPage() {
               <SelectContent>
                 <SelectItem value="created_at-desc">Newest First</SelectItem>
                 <SelectItem value="created_at-asc">Oldest First</SelectItem>
-                <SelectItem value="start_date-desc">Start Date (New)</SelectItem>
-                <SelectItem value="start_date-asc">Start Date (Old)</SelectItem>
+                <SelectItem value="expiry_date-desc">Expiry Date (New)</SelectItem>
                 <SelectItem value="expiry_date-asc">Expiring Soon</SelectItem>
                 <SelectItem value="current_claims-desc">Most Claims</SelectItem>
               </SelectContent>
@@ -366,8 +367,8 @@ export default function OffersPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {offers.map((offer) => (
-              <Card key={offer.id} className="bg-white border-0 shadow-lg hover:shadow-xl transition-shadow">
-                <CardContent className="p-0">
+              <Card key={offer.id} className="bg-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 h-[420px] flex flex-col overflow-hidden py-0">
+                <CardContent className="p-0 flex flex-col h-full">
                   {/* Offer Image */}
                   <div className="relative h-48 bg-gray-200 rounded-t-lg overflow-hidden">
                     {offer.image_url || offer.product?.image_url ? (
@@ -398,7 +399,7 @@ export default function OffersPage() {
                     <div className="absolute top-2 right-2">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="secondary" size="sm" className="h-8 w-8 p-0 bg-white/90 hover:bg-white">
+                          <Button variant="secondary" size="sm" className="h-8 w-8 p-0 bg-white/90 hover:bg-white shadow-sm transition-all duration-200">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -411,12 +412,12 @@ export default function OffersPage() {
                             <Edit className="h-4 w-4 mr-2" />
                             Edit Offer
                           </DropdownMenuItem>
-                          {offer.status === 'active' || offer.status === 'scheduled' ? (
+                          {offer.status === 'active' || offer.status === 'upcoming' ? (
                             <DropdownMenuItem onClick={() => handlePauseResume(offer.id, true)}>
                               <Pause className="h-4 w-4 mr-2" />
                               Pause Offer
                             </DropdownMenuItem>
-                          ) : offer.status === 'paused' ? (
+                          ) : offer.status === 'inactive' ? (
                             <DropdownMenuItem onClick={() => handlePauseResume(offer.id, false)}>
                               <Play className="h-4 w-4 mr-2" />
                               Resume Offer
@@ -435,9 +436,9 @@ export default function OffersPage() {
                   </div>
 
                   {/* Offer Info */}
-                  <div className="p-4">
+                  <div className="px-4 pb-4 flex flex-col flex-grow">
                     <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-semibold text-gray-900 line-clamp-1">{offer.title}</h3>
+                      <h3 className="font-semibold text-gray-900 line-clamp-2">{offer.title}</h3>
                     </div>
                     
                     {offer.product && (
@@ -447,13 +448,13 @@ export default function OffersPage() {
                     )}
 
                     {offer.description && (
-                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                      <p className="text-sm text-gray-600 mb-2 line-clamp-2">
                         {offer.description}
                       </p>
                     )}
 
                     {/* Offer Details */}
-                    <div className="space-y-2 mb-4">
+                    <div className="space-y-2 mb-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Start Date:</span>
                         <span className="font-medium">{formatDate(offer.start_date)}</span>
@@ -472,7 +473,7 @@ export default function OffersPage() {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 mt-auto pt-2">
                       <Button 
                         variant="outline" 
                         size="sm" 
