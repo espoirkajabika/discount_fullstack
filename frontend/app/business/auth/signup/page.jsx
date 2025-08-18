@@ -72,7 +72,7 @@ export default function BusinessSignup() {
     business_website: "",
     avatar_url: "",
     business_hours: null,
-    category_id: null as number | null,
+    category_id: null,
 
     // Location fields
     latitude: null,
@@ -112,7 +112,7 @@ export default function BusinessSignup() {
     loadCategories();
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -120,21 +120,21 @@ export default function BusinessSignup() {
     }));
   };
 
-  const handleCategoryChange = (value: string) => {
+  const handleCategoryChange = (value) => {
     setFormData((prev) => ({
       ...prev,
       category_id: value ? parseInt(value) : null,
     }));
   };
 
-  const togglePasswordVisibility = (field: keyof typeof showPassword) => {
+  const togglePasswordVisibility = (field) => {
     setShowPassword((prev) => ({
       ...prev,
       [field]: !prev[field],
     }));
   };
 
-  const handleLocationSelect = (locationData: any) => {
+  const handleLocationSelect = (locationData) => {
     if (locationData === null) {
       setFormData((prev) => ({
         ...prev,
@@ -179,27 +179,27 @@ export default function BusinessSignup() {
     return true;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    setIsLoading(true); // ✅ Changed from setLoading to setIsLoading
+    setIsLoading(true);
 
     try {
       // Validate required fields
       if (!formData.email || !formData.password || !formData.business_name) {
         setError("Please fill in all required fields");
-        setIsLoading(false); // ✅ Changed from setLoading to setIsLoading
+        setIsLoading(false);
         return;
       }
 
       if (formData.password !== formData.confirmPassword) {
         setError("Passwords do not match");
-        setIsLoading(false); // ✅ Changed from setLoading to setIsLoading
+        setIsLoading(false);
         return;
       }
 
       // Helper function to clean values
-      const cleanValue = (value: any) => {
+      const cleanValue = (value) => {
         if (value === "" || value === undefined) return null;
         return value;
       };
@@ -221,7 +221,7 @@ export default function BusinessSignup() {
         business_website: cleanValue(formData.business_website),
         avatar_url: cleanValue(formData.avatar_url),
         business_hours: cleanValue(formData.business_hours),
-        category_id: formData.category_id ? parseInt(formData.category_id) : null, // Ensure integer
+        category_id: formData.category_id,
 
         // Location fields
         latitude: cleanValue(formData.latitude),
@@ -266,7 +266,7 @@ export default function BusinessSignup() {
       console.error("Signup error:", err);
       setError("Failed to create account. Please try again.");
     } finally {
-      setIsLoading(false); // ✅ Changed from setLoading to setIsLoading
+      setIsLoading(false);
     }
   };
 
@@ -711,7 +711,7 @@ export default function BusinessSignup() {
                         formData.category_id
                           ? formData.category_id.toString()
                           : ""
-                      } // ✅ Convert to string for display
+                      }
                       onValueChange={handleCategoryChange}
                     >
                       <SelectTrigger className="h-12 border-gray-300 focus:border-[#e94e1b] focus:ring-[#e94e1b] rounded-lg">
@@ -723,8 +723,6 @@ export default function BusinessSignup() {
                             key={category.id}
                             value={category.id.toString()}
                           >
-                            {" "}
-                            {/* ✅ Convert to string */}
                             {category.icon} {category.name}
                           </SelectItem>
                         ))}
@@ -944,11 +942,3 @@ export default function BusinessSignup() {
     </div>
   );
 }
-
-
-
-
-// I made some changes to my database on supabase by changing some tables to use integers and not uuid (claimed_offers, categories, offers and saved_offers). I      │
-// │   also did make some changes to the schema. Now on my frontend app signup page, I am getting this error "Validation errors - category_id: UUID input should be a    │
-// │   string, bytes or UUID object"\                                                                                                                                    │
-// │   I need you help to fix this error    
