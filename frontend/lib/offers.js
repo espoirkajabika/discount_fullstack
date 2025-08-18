@@ -116,16 +116,20 @@ export async function pauseOffer(offerId) {
   try {
     console.log('Pausing offer:', offerId)
     
-    // Use the existing updateOffer function to set is_active to false
-    const result = await updateOffer(offerId, { is_active: false })
+    const response = await makeAuthenticatedRequest(`/business/offers/${offerId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: false }),
+    })
     
-    if (result.success) {
-      console.log('Offer paused successfully:', result.offer)
-      return { success: true, offer: result.offer }
-    } else {
-      console.error('Offer pause failed:', result.error)
-      return { error: result.error }
+    if (!response || !response.ok) {
+      const data = await response?.json()
+      console.error('Offer pause failed:', data)
+      return { error: data?.detail || 'Failed to pause offer' }
     }
+    
+    const result = await response.json()
+    console.log('Offer paused successfully:', result)
+    return { success: true, offer: result.offer }
   } catch (error) {
     console.error('Pause offer error:', error)
     return { error: 'Network error. Please try again.' }
@@ -139,16 +143,20 @@ export async function resumeOffer(offerId) {
   try {
     console.log('Resuming offer:', offerId)
     
-    // Use the existing updateOffer function to set is_active to true
-    const result = await updateOffer(offerId, { is_active: true })
+    const response = await makeAuthenticatedRequest(`/business/offers/${offerId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: true }),
+    })
     
-    if (result.success) {
-      console.log('Offer resumed successfully:', result.offer)
-      return { success: true, offer: result.offer }
-    } else {
-      console.error('Offer resume failed:', result.error)
-      return { error: result.error }
+    if (!response || !response.ok) {
+      const data = await response?.json()
+      console.error('Offer resume failed:', data)
+      return { error: data?.detail || 'Failed to resume offer' }
     }
+    
+    const result = await response.json()
+    console.log('Offer resumed successfully:', result)
+    return { success: true, offer: result.offer }
   } catch (error) {
     console.error('Resume offer error:', error)
     return { error: 'Network error. Please try again.' }

@@ -44,7 +44,7 @@ import {
 } from 'lucide-react'
 
 // Import API functions
-import { getOffers, deleteOffer } from '@/lib/offers'
+import { getOffers, deleteOffer, pauseOffer, resumeOffer } from '@/lib/offers'
 import { getProducts } from '@/lib/products'
 import { getImageUrl } from '@/lib/api'
 
