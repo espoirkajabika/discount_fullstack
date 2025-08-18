@@ -54,9 +54,15 @@ export const getImageUrl = (imagePath) => {
   // If it's already a full URL, return as-is
   if (imagePath.startsWith('http')) return imagePath
 
-  // If it's a relative path, construct full URL
-  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-supabase-url.supabase.co'
-  return `${baseUrl}/storage/v1/object/public/product-images/${imagePath}`
+  // If it's a relative path, construct full URL using Supabase Storage
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (supabaseUrl) {
+    return `${supabaseUrl}/storage/v1/object/public/product-images/${imagePath}`
+  }
+
+  // Fallback: if no Supabase URL is configured, return null
+  console.warn('NEXT_PUBLIC_SUPABASE_URL is not configured, cannot load images')
+  return null
 }
 
 // API helper functions for common operations
