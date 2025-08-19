@@ -37,11 +37,14 @@ const AddressAutocomplete = ({
 
       const data = await response.json()
 
+      console.log('Autocomplete API response:', { status: response.status, data })
+
       if (response.ok && data.predictions) {
         setSuggestions(data.predictions)
         setShowSuggestions(true)
       } else {
         console.error('Autocomplete API error:', data.error)
+        console.error('Full response:', { status: response.status, data })
         setSuggestions([])
         setShowSuggestions(false)
       }
