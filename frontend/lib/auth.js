@@ -65,7 +65,7 @@ export async function makeAuthenticatedRequest(endpoint, options = {}) {
   if (response.status === 401) {
     clearAuthData()
     if (typeof window !== 'undefined') {
-      window.location.href = '/auth/login'
+      window.location.href = '/'
     }
     return null
   }

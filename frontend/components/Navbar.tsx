@@ -69,13 +69,13 @@ export default function Navbar() {
                 Home
               </Link>
               <Link
-                href="/shoppers"
+                href="/shoppers/auth/signup"
                 className="text-white hover:text-[#e94e1b] transition-colors font-medium"
               >
                 For Shoppers
               </Link>
               <Link
-                href="/business"
+                href="/business/auth/signup"
                 className="text-white hover:text-[#e94e1b] transition-colors font-medium"
               >
                 For Business

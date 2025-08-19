@@ -89,11 +89,14 @@ export default function BusinessLogin() {
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
         <div className="w-full flex flex-col justify-center items-center p-12 text-white relative z-10">
           {/* Logo */}
-          <div className="flex items-center space-x-3 mb-8">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-[#e94e1b] to-red-600">
-              <MapPin className="h-7 w-7 text-white" />
-            </div>
-            <span className="text-3xl font-bold text-white">PopupReach</span>
+          <div className="flex items-center justify-center mb-8">
+            <img
+              src="/logo.svg"
+              alt="PopupReach Logo"
+              width={240}
+              height={240}
+              className="rounded-lg"
+            />
           </div>
 
           {/* Hero Content */}
@@ -168,11 +171,14 @@ export default function BusinessLogin() {
         <div className="w-full max-w-md">
           {/* Mobile Header */}
           <div className="lg:hidden text-center mb-8">
-            <div className="flex items-center justify-center space-x-2 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-[#e94e1b] to-red-600">
-                <MapPin className="h-6 w-6 text-white" />
-              </div>
-              <span className="text-2xl font-bold text-white">PopupReach</span>
+            <div className="flex items-center justify-center mb-4">
+              <img
+                src="/logo.svg"
+                alt="PopupReach Logo"
+                width={120}
+                height={120}
+                className="rounded-lg"
+              />
             </div>
             
             <div className="flex items-center justify-center space-x-2 mb-4">

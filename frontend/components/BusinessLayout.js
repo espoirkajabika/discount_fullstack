@@ -12,7 +12,6 @@ import {
   TrendingUp,
   Settings,
   LogOut,
-  MapPin,
   Bell,
   RefreshCw,
   User
@@ -41,11 +40,14 @@ function Sidebar({ activeTab, setActiveTab, onLogout, userInfo }) {
   return (
     <div className="w-64 bg-[#1e3a5f] text-white h-screen fixed left-0 top-0 z-40">
       {/* Logo */}
-      <div className="flex items-center space-x-3 p-6 border-b border-[#2a4d6e]">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#e94e1b] to-red-600">
-          <MapPin className="h-5 w-5 text-white" />
-        </div>
-        <span className="text-xl font-bold">PopupReach</span>
+      <div className="flex items-center justify-center p-6 border-b border-[#2a4d6e]">
+        <img
+          src="/logo.svg"
+          alt="PopupReach Logo"
+          width={160}
+          height={160}
+          className="rounded-lg"
+        />
       </div>
 
       {/* User Info */}
