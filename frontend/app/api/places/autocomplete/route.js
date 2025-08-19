@@ -10,8 +10,11 @@ export async function POST(request) {
 
     const apiKey = process.env.GOOGLE_MAPS_API_KEY
     if (!apiKey) {
-      console.error('Google Maps API key not found')
-      return NextResponse.json({ error: 'API configuration error' }, { status: 500 })
+      console.error('Google Maps API key not found in environment variables')
+      console.error('Available env vars:', Object.keys(process.env).filter(key => key.includes('GOOGLE')))
+      return NextResponse.json({ 
+        error: 'Google Maps API key not configured in environment variables' 
+      }, { status: 500 })
     }
 
     // Build the request URL for Google Places Autocomplete API
