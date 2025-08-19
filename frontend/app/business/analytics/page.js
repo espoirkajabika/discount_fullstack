@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext'
 import BusinessLayout from '@/components/BusinessLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useRouter } from 'next/navigation'
 import { 
   BarChart3,
   TrendingUp,
@@ -23,6 +24,7 @@ import {
 
 export default function AnalyticsComingSoon() {
   const { user } = useAuth()
+  const router = useRouter()
 
   if (!user || !user.is_business) {
     return null
@@ -75,12 +77,6 @@ export default function AnalyticsComingSoon() {
                 onClick={() => router.push('/business/dashboard')}
               >
                 Back to Dashboard
-              </Button>
-              <Button 
-                className="bg-white bg-opacity-20 text-white border-white border hover:bg-opacity-30"
-                onClick={() => window.open('mailto:support@popupreach.com?subject=Analytics Update Request')}
-              >
-                Request Updates
               </Button>
             </div>
           </CardContent>

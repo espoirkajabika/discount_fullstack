@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext'
 import BusinessLayout from '@/components/BusinessLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useRouter } from 'next/navigation'
 import { 
   Settings,
   User,
@@ -27,6 +28,7 @@ import {
 
 export default function SettingsComingSoon() {
   const { user } = useAuth()
+  const router = useRouter()
 
   if (!user || !user.is_business) {
     return null
@@ -80,12 +82,6 @@ export default function SettingsComingSoon() {
                 onClick={() => router.push('/business/dashboard')}
               >
                 Back to Dashboard
-              </Button>
-              <Button 
-                className="bg-white bg-opacity-20 text-white border-white border hover:bg-opacity-30"
-                onClick={() => window.open('mailto:support@popupreach.com?subject=Account Settings Request')}
-              >
-                Contact Support
               </Button>
             </div>
           </CardContent>
