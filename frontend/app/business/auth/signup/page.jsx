@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { registerBusiness } from "@/lib/auth";
 import { useAuth } from "@/context/AuthContext";
-// import AddressAutocomplete from '@/components/AddressAutocomplete'
+import AddressAutocomplete from '@/components/AddressAutocomplete'
 
 // Import shadcn components
 import { Button } from "@/components/ui/button";
@@ -85,6 +85,7 @@ export default function BusinessSignup() {
   const [categories, setCategories] = useState([]);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState("account");
   const [showPassword, setShowPassword] = useState({
     password: false,
@@ -251,16 +252,13 @@ export default function BusinessSignup() {
       } else {
         console.log("Registration successful:", result);
 
-        // Auto-login the user and redirect
-        login(result.user, result.token);
+        // Show success state on button
+        setShowSuccess(true);
 
-        // Show success message
-        if (result.message) {
-          alert(result.message || "Registration successful!");
-        }
-
-        // Redirect to dashboard
-        router.push("/business/dashboard");
+        // Redirect to signin page after 2 seconds
+        setTimeout(() => {
+          router.push("/business/auth/signin?registered=true");
+        }, 2000);
       }
     } catch (err) {
       console.error("Signup error:", err);
@@ -809,18 +807,12 @@ export default function BusinessSignup() {
                     >
                       Business Address
                     </Label>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                      <Input
-                        id="business_address"
-                        name="business_address"
-                        type="text"
-                        value={formData.business_address}
-                        onChange={handleChange}
-                        placeholder="123 Main St, City, State"
-                        className="pl-10 h-12 border-gray-300 focus:border-[#e94e1b] focus:ring-[#e94e1b] rounded-lg"
-                      />
-                    </div>
+                    <AddressAutocomplete
+                      value={formData.business_address}
+                      onChange={(value) => setFormData(prev => ({ ...prev, business_address: value }))}
+                      onLocationSelect={handleLocationSelect}
+                      placeholder="Search for your business address..."
+                    />
                     <p className="text-sm text-gray-500">
                       Add your business address to help customers find you
                     </p>
@@ -874,10 +866,15 @@ export default function BusinessSignup() {
                     </Button>
                     <Button
                       onClick={handleSubmit}
-                      disabled={isLoading}
+                      disabled={isLoading || showSuccess}
                       className="bg-[#e94e1b] hover:bg-[#d13f16] text-white px-8 h-12 rounded-lg shadow-lg disabled:opacity-50"
                     >
-                      {isLoading ? (
+                      {showSuccess ? (
+                        <div className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Account Created! Redirecting...</span>
+                        </div>
+                      ) : isLoading ? (
                         <div className="flex items-center space-x-2">
                           <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                           <span>Creating Account...</span>
