@@ -18,7 +18,7 @@ const AddressAutocomplete = ({
   const debounceTimer = useRef(null)
 
   const getSuggestions = async (input) => {
-    if (!input || input.length < 3) {
+    if (!input || input.length < 5) {  // Increased from 3 to 5 characters
       setSuggestions([])
       setShowSuggestions(false)
       return
@@ -91,7 +91,7 @@ const AddressAutocomplete = ({
 
     debounceTimer.current = setTimeout(() => {
       getSuggestions(newValue)
-    }, 300) // 300ms delay
+    }, 1000) // 1 second delay to reduce API calls
   }
 
   const handleSuggestionClick = async (suggestion) => {
